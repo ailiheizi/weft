@@ -1,10 +1,11 @@
 name: CI
 
+# Runs only on version tags (v*) and manual dispatch — NOT on every push —
+# to conserve GitHub Actions minutes. Validate locally before tagging.
 on:
   push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+    tags: ['v*']
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
