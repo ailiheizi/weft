@@ -1,0 +1,17 @@
+[identity]
+name = "tool-shell"
+version = "0.1.0"
+description = "Provider package for shell command execution via the WEFT host bridge."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["tool.shell"]
+
+[capability]
+provides = ["tool.shell"]
+
+[permissions]
+# 按 provides 语义推断（.wasm 无源码）：shell 执行
+process = true

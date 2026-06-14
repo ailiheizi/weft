@@ -1,0 +1,16 @@
+[identity]
+name = "ffmpeg-runtime"
+version = "0.1.0"
+description = "Provider package for deterministic ffmpeg-based video rendering via host_exec."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["video.render"]
+
+[capability]
+provides = ["video.render"]
+
+[permissions]
+process = true

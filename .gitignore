@@ -1,0 +1,94 @@
+# ===== 迁移工具（不进开源仓库）=====
+.migration/
+
+# ===== 私有/本地代理指令（绝不公开）=====
+CLAUDE.md
+.claude/
+AGENT.md
+AGENTS.md
+
+# ===== Rust 构建产物 =====
+/target/
+**/target/
+# workspace 应用可保留；库建议忽略。如需锁定依赖请删除下一行
+Cargo.lock
+**/Cargo.lock
+
+# ===== Flutter / Dart 构建产物 =====
+clients/*/build/
+clients/*/.dart_tool/
+clients/*/.flutter-plugins
+clients/*/.flutter-plugins-dependencies
+**/pubspec.lock
+
+# ===== Node / JS =====
+node_modules/
+**/package-lock.json
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ===== 包运行时生成态（关键：防止把本机状态/锁带出去）=====
+# 注意：packages/installed/ 不整体忽略——index.toml 引用其中的 package.toml 作为
+# current_source（装配索引 + 集成测试发现所必需）。仅忽略 wasm 产物与运行时态：
+packages/installed/**/active
+packages/installed/**/previous
+packages/installed/**/lock.toml
+packages/installed/**/generation-store.toml
+packages/installed/**/generations/
+packages/installed/**/Cargo.lock
+packages/*/active
+packages/*/previous
+packages/*/lock.toml
+packages/*/generation-store.toml
+packages/*/generations/
+packages/official/*/data/
+packages/official/*/runtime-debug/
+**/*.wasm
+**/*.bak
+**/*.bak-*
+
+# ===== 本地配置 / 密钥（只保留 config.example.toml）=====
+config.toml
+config.dev.toml
+config/config.toml
+config/config.dev.toml
+.env
+*.key
+*.pem
+*.p12
+
+# ===== 数据库 / 日志 / 临时 =====
+*.log
+*.sqlite
+*.db
+data/
+temp/
+output/
+.tmp-test-locks/
+
+# ===== 第三方社区技能合集（版权属各贡献者，不进核心仓库）=====
+packages/official/skills/openclaw-skills/
+
+# ===== 不开源的包（用户要求排除）=====
+packages/official/companion-core/
+
+# ===== 模型权重（体积大，应通过 release / 运行时下载，不进 git）=====
+*.onnx
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+
+# ===== IDE / 工具缓存 =====
+.idea/
+.vscode/
+.omc/
+.weft/
+.DS_Store
+Thumbs.db

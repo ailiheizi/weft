@@ -1,0 +1,55 @@
+[identity]
+name = "context-engine"
+version = "0.1.0"
+description = "Desktop context engine that ingests external context signals and matches them into structured proactive skill suggestions."
+author = "WEFT"
+keywords = ["context", "proactive", "desktop"]
+
+[package]
+entry = "server.py"
+runtime = "service"
+api_version = "weft.package.manifest/v1"
+assets = ["context-manifests", "browser-extension", "scripts", "models", "data", "requirements.txt"]
+
+[runtime_contract]
+startup_mode = "persistent"
+communication = ["http"]
+config_delivery = ["env"]
+readiness_probe = "http://127.0.0.1:43131/health"
+liveness_probe = "http://127.0.0.1:43131/health"
+stop_mode = "graceful"
+restart_policy = "host_managed"
+
+[capability]
+provides = ["context.engine", "context.ingest", "context.match"]
+consumes = []
+optional_consumes = []
+exports = ["poll_sources", "drain_pending_events", "get_current_activity", "handle_event", "ingest_external_event"]
+
+[state]
+stateful = false
+
+[requirements]
+capabilities = []
+optional_capabilities = []
+external_prerequisites = []
+user_inputs = []
+
+[integration]
+enhances = ["companion_product"]
+overlaps_with = []
+meaningful_if = ["the product needs independent context ingestion and proactive event matching outside the renderer"]
+adapter_targets = []
+adapter_scopes = []
+install_hooks = []
+configure_hooks = []
+migrate_hooks = []
+validate_hooks = []
+
+[lifecycle]
+healthcheck = "http://127.0.0.1:43131/health"
+
+[governance]
+permissions = ["storage"]
+stability = "experimental"
+audit_tags = ["context", "desktop", "proactive"]

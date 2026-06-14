@@ -1,0 +1,42 @@
+schema_version = 2
+
+[identity]
+name = "weft-code"
+version = "0.1.0"
+display_name = "WEFT-Code"
+description = "统一 runtime 驱动的 CLI/TUI code product"
+
+[package]
+kind = "product"
+
+[requires]
+capabilities = [
+  "agent.runtime",
+  "prompt.system",
+  "workflow.orchestration",
+  "tool.runtime",
+  "tool.shell",
+  "tool.files",
+  "tool.git",
+  "memory.store",
+  "ext.skills",
+  "ext.mcp",
+  "team.runtime",
+  "team.taskboard",
+  "team.handoff",
+  "team.role.catalog",
+  "team.delegate",
+  "team.context.shared",
+  "workflow.template.devteam",
+  "weft_code.runtime",
+]
+
+[features]
+default_enabled = [
+]
+optional = [
+]
+
+[bindings."weft_code.runtime"]
+provider = "weft-code-runtime"
+mutable = false

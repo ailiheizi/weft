@@ -1,0 +1,52 @@
+{
+  "name": "@weft/plugin-ai-workspace-browser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/src/plugin/plugin.js",
+  "exports": {
+    ".": "./dist/src/plugin/plugin.js",
+    "./standalone": "./dist/src/main/main.js",
+    "./types": "./dist/src/shared/types.js"
+  },
+  "scripts": {
+    "dev": "node electron.cjs",
+    "build": "tsc && vite build && electron-builder --dir",
+    "test": "node scripts/smoke-tests.mjs && tsc && node scripts/integration-self-test.mjs",
+    "typecheck": "tsc --noEmit",
+    "start": "electron dist/src/main/main.js"
+  },
+  "dependencies": {
+    "@mozilla/readability": "latest",
+    "@types/turndown": "^5.0.6",
+    "electron-is-dev": "latest",
+    "jsdom": "^29.1.1",
+    "react": "latest",
+    "react-dom": "latest",
+    "turndown": "^7.2.4"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^28.0.1",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
+    "electron": "latest",
+    "electron-builder": "latest",
+    "typescript": "latest",
+    "vite": "latest"
+  },
+  "build": {
+    "appId": "dev.weft.ai-workspace-browser",
+    "productName": "AI Workspace Browser",
+    "files": [
+      "dist/**/*",
+      "plugin.json",
+      "README.md",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    }
+  }
+}

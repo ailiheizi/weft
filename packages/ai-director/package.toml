@@ -1,0 +1,114 @@
+schema_version = 2
+
+[identity]
+name = "ai-director"
+version = "0.1.0"
+display_name = "AI 导演剪辑助手"
+description = "会学习用户风格的 AI 视频剪辑助手：理解素材、输出可解释的导演剪辑方案。"
+
+[package]
+kind = "product"
+
+[requires]
+capabilities = [
+  "agent.runtime",
+  "prompt.system",
+  "memory.store",
+  "ext.skills",
+  "ext.mcp",
+  "channel.bridge",
+  "team.runtime",
+  "team.taskboard",
+  "team.delegate",
+  "team.role.catalog",
+  "team.context.shared",
+  "workflow.orchestration",
+  "workflow.template.creative",
+  "session.events",
+  "core.execution",
+  "director.plan",
+  "director.turn",
+]
+
+[bindings."agent.runtime"]
+provider = "agent-runtime"
+mutable = false
+
+[bindings."prompt.system"]
+provider = "prompt-system"
+mutable = false
+
+[bindings."memory.store"]
+provider = "memory-store"
+mutable = true
+allowed = ["memory-store"]
+
+[bindings."ext.skills"]
+provider = "skills-runtime"
+mutable = true
+allowed = ["skills-runtime"]
+
+[bindings."ext.mcp"]
+provider = "mcp-client"
+mutable = true
+allowed = ["mcp-client"]
+
+[bindings."channel.bridge"]
+provider = "channel-core"
+mutable = true
+allowed = ["channel-core"]
+
+[bindings."team.runtime"]
+provider = "team-runtime"
+mutable = false
+allowed = ["team-runtime"]
+
+[bindings."team.taskboard"]
+provider = "team-task-board"
+mutable = true
+allowed = ["team-task-board"]
+
+[bindings."team.delegate"]
+provider = "agent-runtime"
+mutable = true
+allowed = ["agent-runtime"]
+
+[bindings."team.role.catalog"]
+provider = "creative-role-catalog"
+mutable = false
+allowed = ["creative-role-catalog"]
+
+[bindings."team.context.shared"]
+provider = "team-runtime"
+mutable = true
+allowed = ["team-runtime"]
+
+[bindings."workflow.orchestration"]
+provider = "workflow-orchestrator"
+mutable = false
+
+[bindings."workflow.template.creative"]
+provider = "workflow-template-creative"
+mutable = false
+allowed = ["workflow-template-creative"]
+
+[bindings."session.events"]
+provider = "session-events"
+mutable = true
+allowed = ["session-events"]
+
+[bindings."core.execution"]
+provider = "core"
+mutable = false
+
+[bindings."director.plan"]
+provider = "ai-director"
+mutable = false
+
+[bindings."director.turn"]
+provider = "ai-director"
+mutable = false
+
+[features]
+default_enabled = []
+optional = []

@@ -1,0 +1,13 @@
+[identity]
+name = "workflow-template-devteam"
+version = "0.1.0"
+description = "Provider package for canonical devteam workflow template phases, transitions, and minimal planning rules."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["workflow.template.devteam"]
+
+[capability]
+provides = ["workflow.template.devteam"]

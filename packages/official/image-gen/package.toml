@@ -1,0 +1,20 @@
+[identity]
+name = "image-gen"
+version = "0.1.0"
+description = "图像生成 provider 包：异步 submit/poll/fetch 状态机（当前为 mock 骨架，真实 provider API 待接）。"
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["image.generate"]
+
+[capability]
+provides = ["image.generate"]
+
+[permissions]
+network = true
+
+[features]
+default_enabled = []
+optional = []

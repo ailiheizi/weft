@@ -1,0 +1,34 @@
+[identity]
+name = "js-extension-runtime"
+version = "0.1.0"
+description = "Minimal Node service runtime for JS/TS extension, skill, and prompt template discovery."
+
+[package]
+entry = "server.js"
+runtime = "service"
+api_version = "weft.package.manifest/v1"
+provides = ["extension.runtime.js", "skill.discovery", "prompt.template.discovery", "tool.web", "web.search", "web.fetch"]
+priority = 100
+
+[runtime_contract]
+startup_mode = "persistent"
+communication = ["http"]
+config_delivery = ["env"]
+readiness_probe = "http://127.0.0.1:43134/health"
+liveness_probe = "http://127.0.0.1:43134/health"
+stop_mode = "graceful"
+restart_policy = "host_managed"
+
+[capability]
+provides = ["extension.runtime.js", "skill.discovery", "prompt.template.discovery", "tool.web", "web.search", "web.fetch"]
+
+[state]
+stateful = false
+
+[governance]
+permissions = ["storage"]
+stability = "experimental"
+audit_tags = ["js", "extension-runtime", "skills", "prompts"]
+
+[lifecycle]
+healthcheck = "http://127.0.0.1:43134/health"

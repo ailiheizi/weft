@@ -1,0 +1,4 @@
+data/
+runtime-debug/
+__pycache__/
+*.pyc

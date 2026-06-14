@@ -1,0 +1,17 @@
+[identity]
+name = "tool-files"
+version = "0.1.0"
+description = "Provider package for workspace file inspection and mutation via the WEFT host bridge."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["tool.files"]
+
+[capability]
+provides = ["tool.files"]
+
+[permissions]
+# 按 provides 语义推断（.wasm 无源码）：工作区文件读写
+storage = true

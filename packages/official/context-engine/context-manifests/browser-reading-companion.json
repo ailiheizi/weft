@@ -1,0 +1,16 @@
+{
+  "id": "browser-reading-companion",
+  "name": "网页阅读助手",
+  "desc": "检测正在阅读的文章页面，并把阅读上下文推送给 companion",
+  "version": "1.0",
+  "author": "changzheng",
+  "enabled": true,
+  "eventTypes": [
+    "reading_page_detected"
+  ],
+  "packageDir": "./browser-reading-companion",
+  "scripts": {
+    "match": "scripts/match_event.ps1"
+  },
+  "notes": "需要浏览器扩展发送 reading_page_detected 事件，payload 包含 url、title、article_text、dwell_seconds 等字段；只推送原始上下文，不做 mode framing。"
+}

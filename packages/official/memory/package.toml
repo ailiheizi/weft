@@ -1,0 +1,64 @@
+[identity]
+name = "memory-store"
+version = "0.1.0"
+description = "Hermes-style persistent curated memory runtime prototype."
+author = "WEFT"
+keywords = ["memory", "runtime", "hermes"]
+
+[package]
+entry = "start-memory-runtime.ps1"
+runtime = "service"
+api_version = "weft.package.manifest/v1"
+assets = ["server.py", "hermes_port"]
+
+[runtime_contract]
+startup_mode = "persistent"
+communication = ["http"]
+config_delivery = ["env"]
+readiness_probe = "http://127.0.0.1:43129/health"
+restart_policy = "host_managed"
+
+[capability]
+provides = ["memory.store"]
+
+[binding]
+bind_targets = ["memory.store"]
+preferred_for = ["memory.store"]
+replaces = ["memory.store"]
+sync = ["memory_binding", "memory_namespace_sync", "memory_migration"]
+priority = 200
+
+[state]
+stateful = true
+namespaces = ["memory-runtime", "memory-runtime.memory", "memory-runtime.user"]
+import_formats = ["markdown"]
+export_formats = ["markdown"]
+migration_modes = ["replace"]
+retention_policy = "manual"
+
+[requirements]
+capabilities = []
+optional_capabilities = []
+external_prerequisites = []
+user_inputs = []
+
+[integration]
+enhances = ["memory_product"]
+overlaps_with = ["memory"]
+meaningful_if = ["the product needs a persistent curated memory runtime that can keep running outside one single turn"]
+adapter_targets = []
+adapter_scopes = []
+install_hooks = []
+configure_hooks = []
+migrate_hooks = []
+validate_hooks = []
+
+[lifecycle]
+healthcheck = "http://127.0.0.1:43129/health"
+upgrade_from = []
+
+[governance]
+permissions = ["storage"]
+stability = "experimental"
+audit_tags = ["memory", "runtime", "hermes"]
+debug_endpoints = ["/health", "/memory", "/snapshot", "/prompt"]

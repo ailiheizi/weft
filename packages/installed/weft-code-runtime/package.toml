@@ -1,0 +1,24 @@
+[identity]
+name = "weft-code-runtime"
+version = "0.1.0"
+description = "WASM package checkpoint for the WEFT-Code runtime capability. Provides package-level action dispatch; HTTP route compatibility is handled by the host when available."
+author = "WEFT"
+keywords = ["weft", "code", "runtime", "wasm"]
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["weft_code.runtime"]
+
+[capability]
+provides = ["weft_code.runtime"]
+
+[governance]
+stability = "experimental"
+
+[permissions]
+# 代码运行时：执行命令 + 读写工作区 + 调用 LLM
+storage = true
+process = true
+network = true

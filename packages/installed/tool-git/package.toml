@@ -1,0 +1,18 @@
+[identity]
+name = "tool-git"
+version = "0.1.0"
+description = "Provider package for Git-oriented tool actions routed through the WEFT host bridge."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["tool.git"]
+
+[capability]
+provides = ["tool.git"]
+
+[permissions]
+# 按 provides 语义推断（.wasm 无源码）：git 经 shell 执行 + 读写工作区
+process = true
+storage = true

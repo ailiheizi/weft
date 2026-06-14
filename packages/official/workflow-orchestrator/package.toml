@@ -1,0 +1,13 @@
+[identity]
+name = "workflow-orchestrator"
+version = "0.1.0"
+description = "Foundation package for workflow proposal, verification, and step orchestration metadata."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["workflow.orchestration"]
+
+[capability]
+provides = ["workflow.orchestration"]

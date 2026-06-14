@@ -1,0 +1,166 @@
+schema_version = 2
+
+[identity]
+name = "weft-claw"
+version = "0.1.0"
+display_name = "Weft Claw"
+description = "AI 多角色协作开发助手"
+
+[package]
+kind = "product"
+
+[requires]
+capabilities = [
+  "weft_claw.turn",
+  "agent.runtime",
+  "core.execution",
+  "prompt.system",
+  "memory.store",
+  "ext.skills",
+  "ext.mcp",
+  "channel.bridge",
+  "team.runtime",
+  "team.taskboard",
+  "team.handoff",
+  "team.role.catalog",
+  "team.delegate",
+  "team.context.shared",
+  "workflow.template.devteam",
+  "ui.surface",
+  "session.events",
+]
+
+[features]
+default_enabled = [
+]
+optional = [
+]
+
+[bindings."weft_claw.turn"]
+provider = "weft-claw"
+mutable = false
+
+[bindings."agent.runtime"]
+provider = "agent-runtime"
+mutable = false
+
+[bindings."prompt.system"]
+provider = "prompt-system"
+mutable = false
+
+[bindings."workflow.orchestration"]
+provider = "workflow-orchestrator"
+mutable = false
+
+[bindings."tool.runtime"]
+provider = "tool-runtime-core"
+mutable = false
+
+[bindings."tool.shell"]
+provider = "tool-shell"
+mutable = true
+allowed = ["tool-shell"]
+
+[bindings."tool.files"]
+provider = "tool-files"
+mutable = true
+allowed = ["tool-files"]
+
+[bindings."tool.web"]
+provider = "tool-web"
+mutable = true
+allowed = ["tool-web"]
+
+[bindings."tool.git"]
+provider = "tool-git"
+mutable = true
+allowed = ["tool-git"]
+
+[bindings."ext.skills"]
+provider = "skills-runtime"
+mutable = true
+allowed = ["skills-runtime"]
+
+[bindings."ext.mcp"]
+provider = "mcp-client"
+mutable = true
+allowed = ["mcp-client"]
+
+[bindings."memory.store"]
+provider = "memory-store"
+mutable = true
+allowed = ["memory-store"]
+
+[bindings."core.execution"]
+provider = "core"
+mutable = false
+
+[bindings."ui.surface"]
+provider = "weft-claw"
+mutable = false
+
+[bindings."channel.bridge"]
+provider = "channel-core"
+mutable = true
+allowed = ["channel-core"]
+
+[bindings."team.runtime"]
+provider = "team-runtime"
+mutable = false
+allowed = ["team-runtime"]
+
+[bindings."team.taskboard"]
+provider = "team-task-board"
+mutable = true
+allowed = ["team-task-board"]
+
+[bindings."team.handoff"]
+provider = "team-task-board"
+mutable = true
+allowed = ["team-task-board"]
+
+[bindings."team.delegate"]
+provider = "agent-runtime"
+mutable = true
+allowed = ["agent-runtime"]
+
+[bindings."team.role.catalog"]
+provider = "team-runtime"
+mutable = false
+allowed = ["team-runtime"]
+
+[bindings."team.context.shared"]
+provider = "team-runtime"
+mutable = true
+allowed = ["team-runtime"]
+
+[bindings."workflow.template.devteam"]
+provider = "workflow-template-devteam"
+mutable = false
+allowed = ["workflow-template-devteam"]
+
+[bindings."session.events"]
+provider = "session-events"
+mutable = true
+allowed = ["session-events"]
+
+[validation]
+checks = [
+  "boot",
+  "health",
+  "chat-basic",
+  "memory-basic",
+  "execution-basic",
+  "extensions-basic",
+  "probe:weft_claw.turn",
+  "probe:team.runtime",
+  "probe:team.taskboard",
+  "probe:team.handoff",
+  "probe:team.role.catalog",
+  "probe:team.delegate",
+  "probe:team.context.shared",
+  "probe:workflow.template.devteam",
+]
+
+[upgrade]
+strategy = "safe"

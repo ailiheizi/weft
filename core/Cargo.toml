@@ -1,0 +1,52 @@
+[package]
+name = "weft-core"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "weft-core"
+path = "src/main.rs"
+
+[[bin]]
+name = "weft-sign"
+path = "src/bin/weft-sign.rs"
+
+[[bin]]
+name = "weft"
+path = "src/bin/weft.rs"
+
+[[bin]]
+name = "weft-rpc"
+path = "src/bin/weft-rpc.rs"
+[dependencies]
+weft-package-sdk = { path = "../packages/sdk" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+axum = { version = "0.8", features = ["ws"] }
+tower-http = { version = "0.6", features = ["cors"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+extism = "1.9"
+toml = "0.8"
+bytes = "1"
+futures-util = "0.3"
+async-trait = "0.1"
+rand = "0.8"
+async-stream = "0.3"
+uuid = { version = "1", features = ["v4"] }
+lazy_static = "1.4"
+rusqlite = { version = "0.37", features = ["bundled"] }
+base64 = "0.22"
+sha2 = "0.10"
+libloading = "0.8"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+tempfile = "3"
+http-body-util = "0.1"
+toml = "0.8"

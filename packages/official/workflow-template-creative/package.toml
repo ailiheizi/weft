@@ -1,0 +1,13 @@
+[identity]
+name = "workflow-template-creative"
+version = "0.1.0"
+description = "Provider package for canonical creative workflow template phases, transitions, and orchestration rules."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["workflow.template.creative"]
+
+[capability]
+provides = ["workflow.template.creative"]

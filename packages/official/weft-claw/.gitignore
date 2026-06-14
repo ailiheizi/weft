@@ -1,0 +1,7 @@
+target/
+.omc/
+**/.omc/
+*.wasm
+package.wasm
+plugin.wasm
+Cargo.lock

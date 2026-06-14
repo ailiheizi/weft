@@ -1,0 +1,13 @@
+[identity]
+name = "channel-core"
+version = "0.1.0"
+description = "Foundation package for channel bridge, routing, and channel configuration exchange."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["channel.bridge"]
+
+[capability]
+provides = ["channel.bridge"]

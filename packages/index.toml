@@ -1,0 +1,351 @@
+version = 1
+revision = "packages-index-v1"
+source_url = "local://packages"
+
+[[package_sources]]
+name = "agent-runtime"
+kind = "wasm"
+package_kind = "foundation"
+runtime_provider = "agent-core"
+current_source = "packages/official/agent-core"
+trusted = true
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:OyxUemvOes6A1i/SpKI8e2R0iM6ZGFNoKtapjV7Se+YxGok+ST9xC+SwpVXoRI0iChXdNWpwtLxDVn35nc+wDg=="
+source_authority = "official"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+provides = ["agent.runtime", "team.delegate"]
+requires = ["session.events"]
+
+[[package_sources]]
+name = "memory-store"
+kind = "service"
+package_kind = "provider"
+runtime_provider = "memory"
+current_source = "packages/official/memory"
+trusted = true
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:m/2Sa6/A7AqkFNO2/0amWAeW8fXCGWnOud+s/lWpEElWaCVFmGzLUubELAUyF96g4wzVJu+fINz7tfVp3kNODg=="
+source_authority = "official"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+provides = ["memory.store"]
+
+[[package_sources]]
+name = "skills-runtime"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "skills"
+current_source = "packages/official/skills"
+trusted = true
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:GSkuuNiBfHNebs7BblKTHQdjW34KEoWadNoJWqEMV7zfgxkdIBYAPQQNfItTps/q9O/PKWejKXnix3Iwrm3ZCg=="
+source_authority = "official"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+provides = ["ext.skills", "skills.evolution", "skills.governance", "skills.review", "skills.maintenance"]
+
+[[package_sources]]
+name = "channel-core"
+kind = "wasm"
+package_kind = "foundation"
+runtime_provider = "channels"
+current_source = "packages/official/channels"
+trusted = true
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:J4xGI0OJk/fYgdzOrEJ1KkyiNI+ad2IrvBOR88AiNCYUA983tST04AVWArTiLjOHhzXdJQ6LgawNhccpX0WQAA=="
+source_authority = "official"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+provides = ["channel.bridge"]
+
+[[package_sources]]
+name = "prompt-system"
+kind = "wasm"
+package_kind = "foundation"
+runtime_provider = "prompt-system"
+current_source = "packages/official/prompt-system"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["prompt.system"]
+
+[[package_sources]]
+name = "workflow-orchestrator"
+kind = "wasm"
+package_kind = "foundation"
+runtime_provider = "workflow-orchestrator"
+current_source = "packages/official/workflow-orchestrator"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["workflow.orchestration"]
+
+[[package_sources]]
+name = "team-task-board"
+kind = "wasm"
+package_kind = "foundation"
+runtime_provider = "team-task-board"
+current_source = "packages/official/team-task-board"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["team.taskboard", "team.handoff"]
+
+[[package_sources]]
+name = "workflow-template-devteam"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "workflow-template-devteam"
+current_source = "packages/official/workflow-template-devteam"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["workflow.template.devteam"]
+
+[[package_sources]]
+name = "team-runtime"
+kind = "wasm"
+package_kind = "foundation"
+runtime_provider = "team-runtime"
+current_source = "packages/official/team-runtime"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["team.runtime", "team.role.catalog", "team.context.shared"]
+
+[[package_sources]]
+name = "tool-runtime-core"
+kind = "wasm"
+package_kind = "foundation"
+runtime_provider = "tool-runtime-core"
+current_source = "packages/installed/tool-runtime-core"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["tool.runtime"]
+
+[[package_sources]]
+name = "tool-shell"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "tool-shell"
+current_source = "packages/installed/tool-shell"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["tool.shell"]
+
+[[package_sources]]
+name = "tool-files"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "tool-files"
+current_source = "packages/installed/tool-files"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["tool.files"]
+
+[[package_sources]]
+name = "tool-web"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "tool-web"
+current_source = "packages/installed/tool-web"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["tool.web"]
+
+[[package_sources]]
+name = "tool-git"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "tool-git"
+current_source = "packages/installed/tool-git"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["tool.git"]
+
+[[package_sources]]
+name = "cron"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "cron"
+current_source = "packages/official/cron"
+trusted = true
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:qcVfC9p3YlV7bE5K3niwTaoIv7jdeG1QFND+sSuhKUIfizLLHHK4XWr/NSBXuykrwnc8K0zSZ7I6dTY8ejNyCA=="
+source_authority = "official"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+provides = ["scheduler.cron", "maintenance.tick"]
+
+[[package_sources]]
+name = "mcp-client"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "mcp-client"
+current_source = "packages/official/mcp-client"
+trusted = true
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:DKhxTDhblotNqhTW16/GC/UpRo+EBtOX0nygoSZaTXD6ED7WDuXlFt9mlcJzmhOP7coiv9wP5RV4Qb4e9cXqCA=="
+source_authority = "official"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+provides = ["ext.mcp"]
+
+[[package_sources]]
+name = "companion-core"
+kind = "service"
+package_kind = "foundation"
+runtime_provider = "companion-core"
+current_source = "packages/official/companion-core"
+trusted = true
+signature = "builtin:official"
+provides = ["companion.turn.handle", "companion.turn.complete", "companion.structured_output"]
+
+[[package_sources]]
+name = "memory-runtime"
+kind = "service"
+package_kind = "provider"
+runtime_provider = "memory-runtime"
+current_source = "packages/official/memory-runtime"
+trusted = true
+signature = "builtin:official"
+provides = ["memory.runtime", "memory.curated"]
+
+[[package_sources]]
+name = "context-engine"
+kind = "service"
+package_kind = "provider"
+runtime_provider = "context-engine"
+current_source = "packages/official/context-engine"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["context.engine", "context.ingest", "context.match"]
+
+[[package_sources]]
+name = "generic-agent-runtime"
+kind = "service"
+package_kind = "provider"
+runtime_provider = "generic-agent-runtime"
+current_source = "packages/official/generic-agent-runtime"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["generic_agent.plan", "generic_agent.run", "generic_agent.verify", "generic_agent.crystallize"]
+
+[[package_sources]]
+name = "js-extension-runtime"
+kind = "service"
+package_kind = "provider"
+runtime_provider = "js-extension-runtime"
+current_source = "packages/official/js-extension-runtime"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["extension.runtime.js", "skill.discovery", "prompt.template.discovery"]
+
+[[package_sources]]
+name = "ai-workspace-browser"
+kind = "embedded"
+package_kind = "provider"
+runtime_provider = "ai-workspace-browser"
+current_source = "packages/official/ai-workspace-browser"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["browser.window", "browser.tabs", "browser.context.dom", "browser.context.accessibility", "browser.actions.grounded", "browser.memory.workspace"]
+
+[[package_sources]]
+name = "session-events"
+kind = "wasm"
+package_kind = "foundation"
+runtime_provider = "session-events"
+current_source = "packages/official/session-events"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["session.events"]
+
+[[package_sources]]
+name = "creative-role-catalog"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "creative-role-catalog"
+current_source = "packages/official/creative-role-catalog"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["team.role.catalog"]
+
+[[package_sources]]
+name = "workflow-template-creative"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "workflow-template-creative"
+current_source = "packages/official/workflow-template-creative"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["workflow.template.creative"]
+
+[[package_sources]]
+name = "weft-claw-ui"
+kind = "embedded"
+package_kind = "provider"
+runtime_provider = "weft-claw-ui"
+current_source = "packages/installed/weft-claw"
+trusted = true
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:fNbqFkzkQYglDlwC2vPq3ibZRtMhVyBbEouDI2w9/ZuwU1yp1UYE66tlJMIQdKIBzCid5k0jNrNcBkNrXMPxCQ=="
+source_authority = "local-installed"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+provides = ["ui.surface"]
+
+[[package_sources]]
+name = "weft-claw"
+kind = "wasm"
+package_kind = "product,provider"
+runtime_provider = "weft-claw"
+current_source = "packages/official/weft-claw"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["weft_claw.turn", "ui.surface"]
+requires = ["agent.runtime", "ext.skills", "ext.mcp", "memory.store", "tool.runtime", "session.events"]
+
+[[package_sources]]
+name = "weft-code-runtime"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "weft-code-runtime"
+current_source = "packages/installed/weft-code-runtime"
+trusted = true
+signature = "builtin:local"
+source_authority = "local-installed"
+provides = ["weft_code.runtime"]
+
+[[package_sources]]
+name = "ai-director"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "ai-director"
+current_source = "packages/official/ai-director"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["director.plan", "director.turn"]
+
+[[package_sources]]
+name = "ffmpeg-runtime"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "ffmpeg-runtime"
+current_source = "packages/official/ffmpeg-runtime"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["video.render"]
+
+[[package_sources]]
+name = "image-gen"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "image-gen"
+current_source = "packages/official/image-gen"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["image.generate"]

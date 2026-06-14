@@ -1,0 +1,30 @@
+[workspace]
+members = [
+    "core",
+    "packages/sdk",
+    "crates/weft-code-runtime",
+]
+# WASM plugins must be compiled with --target wasm32-wasip1 separately
+# Use: cargo build -p plugin-agent-core --target wasm32-wasip1 --release
+exclude = [
+    "packages/official/agent-core",
+    "packages/official/channels",
+    "packages/official/cron",
+    "packages/official/mcp-client",
+    "packages/official/memory",
+    "packages/official/skills",
+    "packages/official/ai-director",
+    "packages/official/creative-role-catalog",
+    "packages/official/workflow-template-creative",
+    "packages/official/ffmpeg-runtime",
+    "packages/official/image-gen",
+]
+resolver = "2"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"

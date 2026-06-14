@@ -1,0 +1,13 @@
+[identity]
+name = "tool-git"
+version = "0.1.0"
+description = "Provider package for Git-oriented tool actions routed through the WEFT host bridge."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["tool.git"]
+
+[capability]
+provides = ["tool.git"]

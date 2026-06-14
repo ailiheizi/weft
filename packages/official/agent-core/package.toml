@@ -1,0 +1,26 @@
+[identity]
+name = "agent-runtime"
+version = "0.1.0"
+description = "Foundation package for agent runtime turns, session-aware dialog, and tool dispatch orchestration."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["agent.runtime", "team.delegate"]
+
+[capability]
+provides = ["agent.runtime", "team.delegate"]
+
+[requires]
+capabilities = ["session.events"]
+
+[bindings."session.events"]
+provider = "session-events"
+mutable = false
+
+[permissions]
+# host_fn 用量审计：read/write/list_dir + exec(_advanced) + process_* + sqlite_* + chat_completion(_stream)
+storage = true
+process = true
+network = true

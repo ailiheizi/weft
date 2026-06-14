@@ -1,0 +1,36 @@
+# WEFT Core configuration example
+
+[core]
+# host = "127.0.0.1"
+# port = 3004
+# log_level = "info"
+# data_dir = "./data"
+
+[routing]
+# default_provider = "openai"
+# default_model = "gpt-4o-mini"
+
+[key_strategy]
+# mode = "failover"
+
+[fallback]
+# retry_count = 2
+# switch_key = true
+# switch_provider = false
+# priority = ["openai"]
+
+[[providers]]
+# name = "openai"
+# base_url = "https://api.openai.com"
+# format = "openai"
+# models = ["gpt-4o", "gpt-4o-mini"]
+
+[[providers.keys]]
+# value = "sk-your-key"
+
+[registry]
+# gitea_url = "https://gitea.alhz.org"
+# gitea_org = "weft-plugins"
+# gitea_token = "your-token"
+# package_source_url = "local://packages"
+# app_source_url = "local://apps"

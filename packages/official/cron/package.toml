@@ -1,0 +1,56 @@
+[identity]
+name = "cron"
+version = "0.1.0"
+description = "Scheduled task management"
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "weft.package.manifest/v1"
+
+[binding]
+bind_targets = ["scheduler"]
+preferred_for = ["scheduler"]
+sync = ["cron_binding"]
+priority = 100
+
+[capability]
+provides = ["scheduler.cron", "maintenance.tick"]
+
+[permissions]
+# host_fn 审计：exec/process_spawn/stop（跑定时任务命令）+ read/write/list_dir/sqlite_*（任务存储）
+# + chat_completion（任务可触发 LLM）。A1 权限门控遗漏，补上否则 cron 任务被拦。
+process = true
+storage = true
+network = true
+
+# Sample config schema — exercises every field type the C1 dynamic form renders
+# (string / number+min/max / boolean / select / secret). Optional, metadata only.
+[config.timezone]
+type = "string"
+required = true
+default = "UTC"
+description = "IANA timezone for cron schedule evaluation"
+
+[config.max_concurrent_jobs]
+type = "number"
+default = 4
+min = 1
+max = 64
+description = "Maximum jobs allowed to run simultaneously"
+
+[config.catch_up_missed]
+type = "boolean"
+default = true
+description = "Run jobs that were missed while the runtime was offline"
+
+[config.log_level]
+type = "select"
+default = "info"
+options = ["debug", "info", "warn", "error"]
+description = "Verbosity of the cron scheduler log"
+
+[config.webhook_secret]
+type = "string"
+secret = true
+description = "Shared secret for authenticating outbound cron webhooks"

@@ -1,0 +1,34 @@
+schema_version = 2
+
+[identity]
+name = "session-events"
+version = "0.1.0"
+display_name = "Session Events"
+description = "Reusable SQLite-backed per-session event log capability"
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+kind = "foundation"
+provides = ["session.events"]
+
+[capability]
+provides = ["session.events"]
+
+[permissions]
+# SQLite-backed event log → 持久化存储（运行时验证发现：sqlite_* 经 sdk wrapper 调用，需 storage）
+storage = true
+
+[requires]
+capabilities = []
+
+[features]
+default_enabled = []
+optional = []
+
+[validation]
+checks = ["boot", "health", "probe:session.events"]
+
+[upgrade]
+strategy = "safe"

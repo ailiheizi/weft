@@ -1,0 +1,13 @@
+[identity]
+name = "tool-web"
+version = "0.1.0"
+description = "Provider package for web-facing tool contracts and fetch task envelopes."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["tool.web"]
+
+[capability]
+provides = ["tool.web"]

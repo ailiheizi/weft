@@ -1,0 +1,13 @@
+[identity]
+name = "team-task-board"
+version = "0.1.0"
+description = "Foundation package for canonical devteam task boards, task state, review items, activity log, and explicit handoff records."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["team.taskboard", "team.handoff"]
+
+[capability]
+provides = ["team.taskboard", "team.handoff"]

@@ -1,0 +1,13 @@
+[identity]
+name = "prompt-system"
+version = "0.1.0"
+description = "Foundation package for prompt policy, response contracts, and reusable system prompt composition."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["prompt.system"]
+
+[capability]
+provides = ["prompt.system"]

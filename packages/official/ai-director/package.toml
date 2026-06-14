@@ -1,0 +1,36 @@
+schema_version = 2
+
+[identity]
+name = "ai-director"
+version = "0.1.0"
+display_name = "AI 导演剪辑助手"
+description = "会学习用户风格的 AI 视频剪辑助手：理解素材、输出可解释的导演剪辑方案。"
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+kind = "product"
+provides = ["director.plan", "director.turn"]
+
+[capability]
+provides = ["director.plan", "director.turn"]
+
+[requires]
+capabilities = ["director.plan", "director.turn"]
+
+[bindings."director.plan"]
+provider = "ai-director"
+mutable = false
+
+[bindings."director.turn"]
+provider = "ai-director"
+mutable = false
+
+[permissions]
+network = true
+pipeline = true
+
+[features]
+default_enabled = []
+optional = []

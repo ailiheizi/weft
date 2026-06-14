@@ -1,0 +1,14 @@
+[identity]
+name = "tool-runtime-core"
+version = "0.1.0"
+description = "Foundation package for tool runtime metadata, dispatch envelopes, and tool surface contracts."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["tool.runtime", "tool.registry", "tool.execution", "tool.shell", "tool.files", "tool.web", "tool.git", "tool.wiki", "tool.desktop"]
+assets = ["desktop-runtime", "ai-local-scout"]
+
+[capability]
+provides = ["tool.runtime", "tool.registry", "tool.execution", "tool.shell", "tool.files", "tool.web", "tool.git", "tool.wiki", "tool.desktop"]

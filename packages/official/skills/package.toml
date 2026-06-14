@@ -1,0 +1,20 @@
+[identity]
+name = "skills-runtime"
+version = "0.1.0"
+description = "Provider package for skill discovery, loading, and built-in skill execution exposure."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["ext.skills", "skills.evolution", "skills.governance", "skills.review", "skills.maintenance", "tool.web", "web.search", "web.fetch"]
+priority = 10
+
+[capability]
+provides = ["ext.skills", "skills.evolution", "skills.governance", "skills.review", "skills.maintenance", "tool.web", "web.search", "web.fetch"]
+
+[permissions]
+# host_fn 用量审计：read/write/list_dir + exec(_advanced) + process_* + sqlite_* + chat_completion；并 provides tool.web/web.fetch
+storage = true
+process = true
+network = true

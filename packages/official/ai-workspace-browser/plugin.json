@@ -1,0 +1,20 @@
+{
+  "id": "weft.ai-workspace-browser",
+  "name": "AI Workspace Browser",
+  "version": "0.1.0",
+  "kind": "workspace-plugin",
+  "entry": "dist/src/plugin/plugin.js",
+  "standalone": "dist/src/main/main.js",
+  "capabilities": [
+    "browser.window",
+    "browser.tabs",
+    "browser.context.dom",
+    "browser.context.accessibility",
+    "browser.actions.grounded",
+    "browser.memory.workspace"
+  ],
+  "contextPolicy": {
+    "defaultScreenshots": false,
+    "browserNativeContextOnly": true
+  }
+}

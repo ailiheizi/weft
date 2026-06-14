@@ -1,0 +1,13 @@
+[identity]
+name = "creative-role-catalog"
+version = "0.1.0"
+description = "Provider package for canonical creative team role catalog used by ai-director multi-agent workflows."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["team.role.catalog"]
+
+[capability]
+provides = ["team.role.catalog"]

@@ -1,0 +1,19 @@
+[identity]
+name = "mcp-client"
+version = "0.1.0"
+description = "Provider package for MCP server registration, lifecycle management, and MCP tool surface exposure."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["ext.mcp"]
+
+[capability]
+provides = ["ext.mcp"]
+
+[permissions]
+# MCP server 生命周期：spawn npx/python 等子进程跑 MCP server（process），
+# 与远程 MCP server 通信（network）。A1 权限门控遗漏，补上否则 MCP server 起不来。
+process = true
+network = true
