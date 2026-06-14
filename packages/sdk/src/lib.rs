@@ -267,6 +267,45 @@ struct HostChatCompletionInput<'a> {
     body: &'a str,
 }
 
+/// Issue an arbitrary HTTP request through the host (supports custom headers,
+/// e.g. Authorization for external model APIs). Returns the response body on 2xx.
+pub fn http_request(
+    method: &str,
+    url: &str,
+    headers: &[(&str, &str)],
+    body: &str,
+) -> Result<String, String> {
+    let header_map: std::collections::HashMap<&str, &str> = headers.iter().copied().collect();
+    let input = serde_json::json!({
+        "method": method,
+        "url": url,
+        "headers": header_map,
+        "body": body,
+    })
+    .to_string();
+
+    let raw = unsafe { host_http_request(input) }
+        .map_err(|e| format!("host_http_request failed: {e}"))?;
+    let parsed: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|e| format!("host_http_request returned invalid json: {e}"))?;
+    if let Some(err) = parsed.get("error").and_then(|v| v.as_str()) {
+        if !err.trim().is_empty() {
+            return Err(err.to_string());
+        }
+    }
+    let status = parsed.get("status").and_then(|v| v.as_u64()).unwrap_or(0);
+    let resp_body = parsed
+        .get("body")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if (200..300).contains(&status) {
+        Ok(resp_body)
+    } else {
+        Err(format!("http status {status}: {resp_body}"))
+    }
+}
+
 pub fn chat_completion(request_label: &str, endpoint: &str, body: &str) -> Result<String, String> {
     let input = serde_json::to_string(&HostChatCompletionInput {
         request_label,

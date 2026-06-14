@@ -417,6 +417,33 @@ host_fn!(pub host_write_file(user_data: WasmHostState; input: String) {
     Ok(())
 });
 
+// Write binary content (decoded from base64) to a file. For large media
+// (images/audio/video) that can't go through host_write_file's String content.
+// input JSON: ["path", "<base64>"]. Output JSON: {ok:true,path} or {error}.
+host_fn!(pub host_write_file_base64(user_data: WasmHostState; input: String) -> String {
+    gate_permission!(user_data, Permission::Storage);
+    let parsed: Vec<String> = serde_json::from_str(&input).unwrap_or_default();
+    let path = parsed.first().cloned().unwrap_or_default();
+    let b64 = parsed.get(1).cloned().unwrap_or_default();
+    if path.is_empty() {
+        return Ok(r#"{"error":"host_write_file_base64 requires path"}"#.to_string());
+    }
+    if path.contains("..") {
+        return Ok(r#"{"error":"path traversal not allowed"}"#.to_string());
+    }
+    let bytes = match base64::engine::general_purpose::STANDARD.decode(b64.trim()) {
+        Ok(b) => b,
+        Err(e) => return Ok(serde_json::json!({ "error": format!("invalid base64: {e}") }).to_string()),
+    };
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    match std::fs::write(&path, &bytes) {
+        Ok(()) => Ok(serde_json::json!({ "ok": true, "path": path, "bytes": bytes.len() }).to_string()),
+        Err(e) => Ok(serde_json::json!({ "error": format!("write failed: {e}") }).to_string()),
+    }
+});
+
 host_fn!(pub host_list_dir(user_data: WasmHostState; path: String) -> String {
     gate_permission!(user_data, Permission::Storage);
     if path.contains("..") {

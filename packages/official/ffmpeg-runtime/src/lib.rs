@@ -23,12 +23,13 @@ pub fn handle_ws_message(input: String) -> FnResult<String> {
         "describe" => PackageResult::ok(json!({
             "package": PACKAGE_NAME,
             "capability": CAPABILITY_NAME,
-            "actions": ["describe", "health", "probe", "concat", "export"],
+            "actions": ["describe", "health", "probe", "concat", "export", "slideshow"],
         })),
         "health" => do_health(),
         "probe" => do_probe(&req.data),
         "concat" => do_concat(&req.data),
         "export" => do_export(&req.data),
+        "slideshow" => do_slideshow(&req.data),
         _ => PackageResult::err(format!("unknown action: {}", req.action)),
     };
 
@@ -125,6 +126,89 @@ fn do_export(data: &Value) -> PackageResult {
             "stdout": exec.stdout_text(),
             "stderr": exec.stderr_text(),
         })),
+        Err(error) => PackageResult::err(error),
+    }
+}
+
+/// Compose a slideshow video from still images, each shown for a duration.
+/// data: {images:[path,...], durations:[sec,...] (optional, default 3s each),
+///        output, fps?(default 25), size?(default 1280x720)}.
+/// Builds: for each image `-loop 1 -t <dur> -i <img>`, then concat filter -> output.
+fn do_slideshow(data: &Value) -> PackageResult {
+    let Some(images) = data.get("images").and_then(|v| v.as_array()) else {
+        return PackageResult::err("slideshow requires data.images (array of paths)");
+    };
+    if images.is_empty() {
+        return PackageResult::err("slideshow requires at least one image");
+    }
+    let Some(output) = get_required_string(data, "output") else {
+        return PackageResult::err("slideshow requires data.output");
+    };
+    let fps = data.get("fps").and_then(|v| v.as_u64()).unwrap_or(25);
+    let size = get_optional_string(data, "size").unwrap_or_else(|| "1280x720".to_string());
+    let durations = data.get("durations").and_then(|v| v.as_array());
+
+    let img_paths: Vec<String> = images
+        .iter()
+        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+        .collect();
+    if img_paths.is_empty() {
+        return PackageResult::err("slideshow images must be string paths");
+    }
+
+    let mut args: Vec<String> = vec!["-y".to_string()];
+    // One looped image input per slide.
+    for (i, img) in img_paths.iter().enumerate() {
+        let dur = durations
+            .and_then(|d| d.get(i))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(3.0);
+        args.push("-loop".to_string());
+        args.push("1".to_string());
+        args.push("-t".to_string());
+        args.push(format!("{dur}"));
+        args.push("-i".to_string());
+        args.push(img.clone());
+    }
+
+    // Scale each input to the target size (forced), then concat.
+    // ffmpeg scale wants W:H (colon), so normalize "1024x1024" -> "1024:1024".
+    let scale_size = size.replace('x', ":");
+    let n = img_paths.len();
+    let mut filter = String::new();
+    for i in 0..n {
+        filter.push_str(&format!(
+            "[{i}:v]scale={scale_size},setsar=1,fps={fps},format=yuv420p[v{i}];"
+        ));
+    }
+    for i in 0..n {
+        filter.push_str(&format!("[v{i}]"));
+    }
+    filter.push_str(&format!("concat=n={n}:v=1:a=0[outv]"));
+
+    args.push("-filter_complex".to_string());
+    args.push(filter);
+    args.push("-map".to_string());
+    args.push("[outv]".to_string());
+    args.push("-c:v".to_string());
+    args.push("libx264".to_string());
+    args.push("-pix_fmt".to_string());
+    args.push("yuv420p".to_string());
+    args.push(output.clone());
+
+    match run_ffmpeg(&args) {
+        Ok(exec) if exec.status == 0 => PackageResult::ok(json!({
+            "output": output,
+            "images": img_paths.len(),
+            "fps": fps,
+            "size": size,
+            "status": exec.status,
+        })),
+        Ok(exec) => PackageResult::err(format!(
+            "slideshow ffmpeg failed (status {}): {}",
+            exec.status,
+            exec_error_text(&exec)
+        )),
         Err(error) => PackageResult::err(error),
     }
 }

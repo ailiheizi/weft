@@ -1153,7 +1153,7 @@ class _InputBar extends StatelessWidget {
               keyboardType: TextInputType.multiline,
               textInputAction: TextInputAction.newline,
               decoration: InputDecoration(
-                hintText: isStreaming ? 'Generating…' : 'Type a message…',
+                hintText: isStreaming ? 'Generating…' : 'Type a message…  (/team 强制组建团队)',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: theme.colorScheme.outline),

@@ -26,13 +26,14 @@ pub fn handle_ws_message(input: String) -> FnResult<String> {
             "package": PACKAGE_NAME,
             "capability": CAPABILITY_NAME,
             "runtime": "wasm",
-            "actions": ["describe", "health", "submit", "poll", "fetch"],
-            "note": "async submit/poll/fetch state machine (mock skeleton; real provider API pending)",
+            "actions": ["describe", "health", "generate", "submit", "poll", "fetch"],
+            "note": "generate = synchronous real image gen (OpenAI-compatible /v1/images/generations); submit/poll/fetch = async state machine skeleton",
         })),
         "health" => PackageResult::ok(serde_json::json!({
             "healthy": true,
             "package": PACKAGE_NAME,
         })),
+        "generate" => generate(&req.data),
         "submit" => submit(&req.data),
         "poll" => poll(&req.data),
         "fetch" => fetch(&req.data),
@@ -40,6 +41,73 @@ pub fn handle_ws_message(input: String) -> FnResult<String> {
     };
 
     Ok(result.to_json())
+}
+
+/// Synchronous real image generation via an OpenAI-compatible
+/// `/v1/images/generations` endpoint (e.g. apiyi gateway).
+/// data: {prompt, model?, size?, base_url, api_key}.
+/// Returns {b64_json, model} on success (caller decides how to persist the image).
+fn generate(data: &serde_json::Value) -> PackageResult {
+    let prompt = data.get("prompt").and_then(|v| v.as_str()).unwrap_or("");
+    if prompt.trim().is_empty() {
+        return PackageResult::err("generate requires 'prompt'");
+    }
+    let base_url = data
+        .get("base_url")
+        .and_then(|v| v.as_str())
+        .unwrap_or("https://api.apiyi.com")
+        .trim_end_matches('/');
+    let api_key = data.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
+    if api_key.trim().is_empty() {
+        return PackageResult::err("generate requires 'api_key'");
+    }
+    let model = data
+        .get("model")
+        .and_then(|v| v.as_str())
+        .unwrap_or("gpt-image-2-vip");
+    let size = data.get("size").and_then(|v| v.as_str()).unwrap_or("1024x1024");
+
+    let req_body = serde_json::json!({
+        "model": model,
+        "prompt": prompt,
+        "n": 1,
+        "size": size,
+    })
+    .to_string();
+
+    let url = format!("{base_url}/v1/images/generations");
+    let auth = format!("Bearer {api_key}");
+    let resp = match http_request(
+        "POST",
+        &url,
+        &[("Authorization", auth.as_str()), ("Content-Type", "application/json")],
+        &req_body,
+    ) {
+        Ok(body) => body,
+        Err(error) => return PackageResult::err(format!("image API call failed: {error}")),
+    };
+
+    // Parse OpenAI image response: {data:[{b64_json | url}]}
+    let parsed: serde_json::Value = match serde_json::from_str(&resp) {
+        Ok(v) => v,
+        Err(error) => return PackageResult::err(format!("invalid image API response: {error}")),
+    };
+    let first = parsed.get("data").and_then(|d| d.as_array()).and_then(|a| a.first());
+    match first {
+        Some(item) => {
+            let b64 = item.get("b64_json").and_then(|v| v.as_str());
+            let img_url = item.get("url").and_then(|v| v.as_str());
+            PackageResult::ok(serde_json::json!({
+                "model": model,
+                "prompt": prompt,
+                // one of these will be present depending on the provider
+                "b64_json": b64,
+                "url": img_url,
+                // TODO: decode b64 + host_write_file to workspace, return local path
+            }))
+        }
+        None => PackageResult::err(format!("image API returned no data: {}", resp.chars().take(200).collect::<String>())),
+    }
 }
 
 /// Submit an image generation job. Returns a job_id.

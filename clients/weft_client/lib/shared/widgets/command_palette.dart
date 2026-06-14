@@ -73,7 +73,6 @@ class _CommandPaletteState extends ConsumerState<CommandPalette> {
   static const _nav = [
     (path: '/dashboard', label: 'Dashboard', icon: Icons.dashboard_outlined),
     (path: '/chat', label: 'Chat', icon: Icons.chat_outlined),
-    (path: '/orchestration', label: 'Orchestration', icon: Icons.account_tree_outlined),
     (path: '/packages', label: 'Packages', icon: Icons.extension_outlined),
     (path: '/providers', label: 'Providers', icon: Icons.bolt_outlined),
     (path: '/services', label: 'Services', icon: Icons.dns_outlined),

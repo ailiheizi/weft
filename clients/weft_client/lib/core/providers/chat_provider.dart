@@ -23,7 +23,6 @@ class ChatNotifier extends StateNotifier<ChatSession> {
   final WeftClawApi _api;
   final ChatStorage _storage;
   final Ref _ref;
-  bool _loadingHistory = false;
 
   /// 当前进行中的轮询 timer 与请求取消令牌（供 stopStreaming 中断）
   Timer? _pollTimer;
@@ -31,7 +30,6 @@ class ChatNotifier extends StateNotifier<ChatSession> {
   bool _stopRequested = false;
 
   Future<void> _loadHistory(String sessionId) async {
-    _loadingHistory = true;
     try {
       // 优先从 weft-claw 加载历史消息
       final rcMessages = await _api.getSessionMessages(sessionId);
@@ -63,7 +61,6 @@ class ChatNotifier extends StateNotifier<ChatSession> {
           }
         } catch (_) {}
         if (mounted) state = state.copyWith(messages: messages);
-        _loadingHistory = false;
         return;
       }
     } catch (_) {}
@@ -75,7 +72,6 @@ class ChatNotifier extends StateNotifier<ChatSession> {
         state = state.copyWith(messages: messages);
       }
     } catch (_) {}
-    _loadingHistory = false;
   }
 
   Future<void> _autoSelectProvider() async {
@@ -99,7 +95,20 @@ class ChatNotifier extends StateNotifier<ChatSession> {
     _stopRequested = false;
     _cancelToken = CancelToken();
 
-    final userMsg = ChatMessage.user(content.trim());
+    // 斜杠指令 /team：强制走多 agent 团队编排。UI 仍显示用户原文(去掉指令前缀),
+    // 但发给后端的内容包成强指令,让 AI 务必调用 delegate_to_team 而非自己直接做。
+    final trimmed = content.trim();
+    final isTeamCommand = trimmed.toLowerCase().startsWith('/team ') ||
+        trimmed.toLowerCase() == '/team';
+    final displayContent = isTeamCommand
+        ? trimmed.replaceFirst(RegExp(r'^/team\s*', caseSensitive: false), '').trim()
+        : trimmed;
+    final backendContent = isTeamCommand
+        ? '这是需要团队协作的复杂任务，请务必调用 delegate_to_team 组建团队（planner→implementer→reviewer→integrator）来完成，不要自己直接动手。任务：$displayContent'
+        : trimmed;
+    if (isTeamCommand && displayContent.isEmpty) return;
+
+    final userMsg = ChatMessage.user(displayContent);
     final isFirstMessage = state.messages.isEmpty;
     state = state.copyWith(
       messages: [...state.messages, userMsg],
@@ -109,7 +118,7 @@ class ChatNotifier extends StateNotifier<ChatSession> {
     await _ref.read(sessionsProvider.notifier).onMessageAdded(
           state.id,
           messageCount: state.messages.length,
-          firstUserContent: isFirstMessage ? content.trim() : null,
+          firstUserContent: isFirstMessage ? displayContent : null,
         );
 
     final assistantId = _uuid.v4();
@@ -176,7 +185,7 @@ class ChatNotifier extends StateNotifier<ChatSession> {
     try {
       final reply = await _api.sendMessage(
         sessionId,
-        content.trim(),
+        backendContent,
         model: state.selectedModel,
         cancelToken: _cancelToken,
       );
@@ -311,7 +320,7 @@ class ChatNotifier extends StateNotifier<ChatSession> {
                       .join('\n');
                 } else if (data['stdout'] is String) {
                   result = (data['stdout'] as String).trim();
-                  if (result!.length > 400) result = '${result.substring(0, 400)}…';
+                  if (result.length > 400) result = '${result.substring(0, 400)}…';
                 } else {
                   result = jsonEncode(data);
                   if (result.length > 400) result = '${result.substring(0, 400)}…';

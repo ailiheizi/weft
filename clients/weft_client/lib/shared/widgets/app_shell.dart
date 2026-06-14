@@ -22,7 +22,6 @@ class AppShell extends ConsumerWidget {
   static const _fixed = [
     (path: '/dashboard', icon: Icons.dashboard_outlined, label: 'Dashboard'),
     (path: '/chat', icon: Icons.chat_outlined, label: 'Chat'),
-    (path: '/orchestration', icon: Icons.groups_outlined, label: '团队'),
     (path: '/packages', icon: Icons.extension_outlined, label: 'Packages'),
     (path: '/providers', icon: Icons.bolt_outlined, label: 'Providers'),
     (path: '/services', icon: Icons.dns_outlined, label: 'Services'),
@@ -145,7 +144,7 @@ class AppShell extends ConsumerWidget {
 }
 
 /// Linear 式连续键导航：按 `g` 后 1.2s 内再按目标键跳转。
-/// g d=dashboard / c=chat / p=packages / s=store / o=orchestration /
+/// g d=dashboard / c=chat / p=packages / s=store /
 /// r=providers / v=services / , =settings。输入框聚焦时不拦截。
 class _GotoKeyHandler extends StatefulWidget {
   const _GotoKeyHandler({required this.child});
@@ -162,7 +161,6 @@ class _GotoKeyHandlerState extends State<_GotoKeyHandler> {
   static final _map = {
     LogicalKeyboardKey.keyD: '/dashboard',
     LogicalKeyboardKey.keyC: '/chat',
-    LogicalKeyboardKey.keyO: '/orchestration',
     LogicalKeyboardKey.keyP: '/packages',
     LogicalKeyboardKey.keyS: '/settings',
     LogicalKeyboardKey.keyR: '/providers',

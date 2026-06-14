@@ -1220,6 +1220,34 @@ fn builtin_skills() -> Vec<SkillDef> {
                 "required": ["session_id", "content"]
             }),
         },
+        SkillDef {
+            name: "generate_image".into(),
+            description: "根据文字描述生成一张图像。用于创作分镜画面、概念图、视觉素材。返回图像的 base64 或保存路径。".into(),
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "图像的文字描述"},
+                    "model": {"type": "string", "default": "gpt-image-2-vip", "description": "图像模型"},
+                    "size": {"type": "string", "default": "1024x1024"}
+                },
+                "required": ["prompt"]
+            }),
+        },
+        SkillDef {
+            name: "render_video".into(),
+            description: "把多张图像合成为一段视频（每张图按指定时长显示）。用于把分镜图拼成成片。".into(),
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "images": {"type": "array", "items": {"type": "string"}, "description": "图像文件路径列表"},
+                    "durations": {"type": "array", "items": {"type": "number"}, "description": "每张图显示秒数"},
+                    "output": {"type": "string", "description": "输出视频路径"},
+                    "fps": {"type": "integer", "default": 25},
+                    "size": {"type": "string", "default": "1024x1024"}
+                },
+                "required": ["images", "output"]
+            }),
+        },
     ]
 }
 
@@ -1921,6 +1949,41 @@ fn do_web_fetch(args: &serde_json::Value) -> PackageResult {
     PackageResult::err("web fetch transport failed: missing HTTP status marker in curl output")
 }
 
+fn capability_result(raw: String) -> PackageResult {
+    let result: serde_json::Value = serde_json::from_str(&raw)
+        .unwrap_or_else(|_| serde_json::json!({"result": raw}));
+    PackageResult::ok(result)
+}
+
+fn do_generate_image(args: &serde_json::Value) -> PackageResult {
+    let api_key = env_get("WEFT_IMAGE_API_KEY")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let Some(api_key) = api_key else {
+        return PackageResult::err("generate_image requires WEFT_IMAGE_API_KEY environment variable");
+    };
+    let base_url = env_get("WEFT_IMAGE_BASE_URL")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "https://api.apiyi.com".to_string());
+
+    let mut payload = args.as_object().cloned().unwrap_or_default();
+    payload.insert("api_key".to_string(), serde_json::Value::String(api_key));
+    payload.insert("base_url".to_string(), serde_json::Value::String(base_url));
+
+    match call_capability_action("image.generate", "generate", &serde_json::Value::Object(payload)) {
+        Ok(raw) => capability_result(raw),
+        Err(error) => PackageResult::err(format!("generate_image failed: {}", error)),
+    }
+}
+
+fn do_render_video(args: &serde_json::Value) -> PackageResult {
+    match call_capability_action("video.render", "slideshow", args) {
+        Ok(raw) => capability_result(raw),
+        Err(error) => PackageResult::err(format!("render_video failed: {}", error)),
+    }
+}
+
 fn agent_skills_key(agent: &str) -> String {
     format!("skills:agent:{}", agent)
 }
@@ -2264,6 +2327,8 @@ fn do_execute_tool(agent: &str, tool: &str, args: &serde_json::Value) -> Package
         "web_search" => do_web_search(args),
         "ask_user" => do_ask_user(args),
         "delegate" => do_delegate(args),
+        "generate_image" => do_generate_image(args),
+        "render_video" => do_render_video(args),
         _ => {
             if let Some((server, tool_name)) = parse_external_tool_name(tool) {
                 match call_package(

@@ -166,8 +166,8 @@ packages/
 clients/
   weft_client/        Flutter desktop client (Windows/macOS/Linux)
 config.example.toml   Provider config template
-.github/workflows/    CI
-scripts/precheck.ps1  Pre-commit safety check
+.github/workflows/    CI + release
+scripts/              Build helpers (e.g. build-wasm-packages.sh)
 ```
 
 ---
