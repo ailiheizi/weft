@@ -25,6 +25,34 @@ use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::runtime::Handle;
 
+// ── Dedicated runtime for WASM host-function blocking calls ──
+//
+// WASM host functions are synchronous (extism calls them and blocks for the
+// return value), but several need to drive async work (HTTP egress, nested
+// capability dispatch). They do this via `block_on`. Running those `block_on`
+// calls on the MAIN HTTP runtime deadlocks under nesting: a skills package
+// tool calls `host_capability_call` → `block_on(execute_capability_call)`,
+// which dispatches into another package whose host fn (`host_http_request`)
+// `block_on`s a 60s request. Nested `block_on` on the same runtime starves the
+// shared worker/IO-driver pool — even the lock-free `/health` handler stops
+// responding. Isolating host blocking work on its OWN multi-threaded runtime
+// keeps the main runtime's workers free (health stays live) and gives nested
+// host calls an independent pool to make progress on.
+pub fn host_blocking_handle() -> Handle {
+    use std::sync::OnceLock;
+    static HOST_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    HOST_RT
+        .get_or_init(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .thread_name("weft-host-blocking")
+                .build()
+                .expect("failed to build dedicated WASM host runtime")
+        })
+        .handle()
+        .clone()
+}
+
 // ── Shared host state (UserData for host functions) ──
 
 /// Shared package map — allows host functions to call other plugins
@@ -1227,6 +1255,13 @@ host_fn!(pub host_capability_call(user_data: WasmHostState; input: String) -> St
     let Some(app_state) = ud.app_state.lock().ok().and_then(|state| state.clone()) else {
         return Ok(r#"{"error":"app state unavailable for capability routing"}"#.to_string());
     };
+    // Clone what the async block needs, then release the ud lock BEFORE block_on.
+    // Holding the ud Mutex across a (possibly long, e.g. 60s HTTP) nested capability
+    // call deadlocks: the inner package's host fns (host_http_request, etc.) try to
+    // re-acquire this same ud lock and block forever. host_http_request (above) uses
+    // the same drop-before-block_on pattern for exactly this reason.
+    let runtime_handle = ud.runtime_handle.clone();
+    drop(ud);
 
     let capability_name = capability.to_string();
     let payload = serde_json::json!({
@@ -1236,7 +1271,7 @@ host_fn!(pub host_capability_call(user_data: WasmHostState; input: String) -> St
         "provider": provider,
     });
 
-    let result = ud.runtime_handle.block_on(async move {
+    let result = runtime_handle.block_on(async move {
         crate::api::capabilities::execute_capability_call(&app_state, &capability_name, payload).await
     });
 
@@ -1573,6 +1608,13 @@ impl WasmPackageHost {
                 [],
                 user_data.clone(),
                 host_write_file,
+            )
+            .with_function(
+                "host_write_file_base64",
+                [PTR],
+                [PTR],
+                user_data.clone(),
+                host_write_file_base64,
             )
             .with_function(
                 "host_list_dir",

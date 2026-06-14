@@ -78,6 +78,7 @@ extern "ExtismHost" {
     pub fn host_env_get(key: String) -> String;
     pub fn host_read_file(path: String) -> String;
     pub fn host_write_file(input: String);
+    pub fn host_write_file_base64(input: String) -> String;
     pub fn host_list_dir(path: String) -> String;
     pub fn host_exec(input: String) -> String;
     pub fn host_exec_advanced(input: String) -> String;
@@ -174,6 +175,26 @@ pub fn read_file(path: &str) -> Result<String, String> {
 pub fn write_file(path: &str, content: &str) {
     let input = serde_json::json!([path, content]).to_string();
     let _ = unsafe { host_write_file(input) };
+}
+
+/// Write binary content (given as base64) to a file. For large media that
+/// can't go through write_file's String content. Returns the path on success.
+pub fn write_file_base64(path: &str, b64: &str) -> Result<String, String> {
+    let input = serde_json::json!([path, b64]).to_string();
+    let raw = unsafe { host_write_file_base64(input) }
+        .map_err(|e| format!("host_write_file_base64 failed: {e}"))?;
+    let parsed: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|e| format!("host_write_file_base64 returned invalid json: {e}"))?;
+    if let Some(err) = parsed.get("error").and_then(|v| v.as_str()) {
+        if !err.trim().is_empty() {
+            return Err(err.to_string());
+        }
+    }
+    Ok(parsed
+        .get("path")
+        .and_then(|v| v.as_str())
+        .unwrap_or(path)
+        .to_string())
 }
 
 /// List directory entries. Returns JSON array of {name, is_dir}.

@@ -4,6 +4,7 @@ import '../../../core/models/error.dart';
 /// Unified error display widget that handles [AppException] subtypes.
 ///
 /// - [CoreOfflineException] → "Core offline" with cloud-off icon
+/// - [AuthException]        → "Authentication failed" with a lock icon
 /// - [ApiException]         → "Error `statusCode`" with error icon
 /// - other                  → generic warning
 class AppErrorWidget extends StatelessWidget {
@@ -20,6 +21,11 @@ class AppErrorWidget extends StatelessWidget {
       CoreOfflineException e => (
           Icons.cloud_off_outlined,
           'Core offline',
+          e.message,
+        ),
+      AuthException e => (
+          Icons.lock_outline,
+          'Authentication failed',
           e.message,
         ),
       ApiException e => (

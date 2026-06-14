@@ -424,7 +424,9 @@ pub async fn reload_package(
         let host_state = crate::package::bridge::WasmHostState {
             config: state.config.clone(),
             pipeline: state.pipeline.clone(),
-            runtime_handle: tokio::runtime::Handle::current(),
+            // Dedicated host runtime (see bridge::host_blocking_handle) — must
+            // match main.rs so nested host block_on never runs on the HTTP runtime.
+            runtime_handle: crate::package::bridge::host_blocking_handle(),
             process_manager: state.process_manager.clone(),
             vkey_store: state.vkey_store.clone(),
             kv_store: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),

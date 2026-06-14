@@ -95,16 +95,35 @@ fn generate(data: &serde_json::Value) -> PackageResult {
     let first = parsed.get("data").and_then(|d| d.as_array()).and_then(|a| a.first());
     match first {
         Some(item) => {
-            let b64 = item.get("b64_json").and_then(|v| v.as_str());
             let img_url = item.get("url").and_then(|v| v.as_str());
-            PackageResult::ok(serde_json::json!({
-                "model": model,
-                "prompt": prompt,
-                // one of these will be present depending on the provider
-                "b64_json": b64,
-                "url": img_url,
-                // TODO: decode b64 + host_write_file to workspace, return local path
-            }))
+            if let Some(b64) = item.get("b64_json").and_then(|v| v.as_str()) {
+                // Persist the image to a file and return its PATH (not the 2MB
+                // base64) — large media must not cross the WASM/LLM boundary.
+                let out_path = data
+                    .get("output_path")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| {
+                        format!("./workspace/image-gen/img-{}.png", prompt.chars().count())
+                    });
+                match write_file_base64(&out_path, b64) {
+                    Ok(saved) => PackageResult::ok(serde_json::json!({
+                        "model": model,
+                        "prompt": prompt,
+                        "output_path": saved,
+                    })),
+                    Err(error) => PackageResult::err(format!("failed to save image: {error}")),
+                }
+            } else if let Some(u) = img_url {
+                // Provider returned a URL instead of base64 — pass it through.
+                PackageResult::ok(serde_json::json!({
+                    "model": model,
+                    "prompt": prompt,
+                    "url": u,
+                }))
+            } else {
+                PackageResult::err("image API response had neither b64_json nor url")
+            }
         }
         None => PackageResult::err(format!("image API returned no data: {}", resp.chars().take(200).collect::<String>())),
     }

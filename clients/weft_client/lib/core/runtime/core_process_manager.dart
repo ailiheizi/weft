@@ -2,14 +2,26 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+
+/// Join path segments with the platform separator (avoids a `package:path`
+/// dependency that the client's pubspec doesn't declare).
+String _join(String a, [String? b, String? c, String? d, String? e]) {
+  final sep = Platform.pathSeparator;
+  return [a, b, c, d, e].whereType<String>().join(sep);
+}
 
 /// Manages the bundled `weft-core` sidecar process.
 ///
 /// On startup the client tries to reach an already-running core at
 /// [host]:[port]; if one is found it is reused (e.g. a developer running the
 /// core by hand). Otherwise the bundled `weft-core` binary is located and
-/// launched, and we poll `/api/health` until it is ready.
+/// launched with an explicit `--data-dir`, and we poll `/api/health` until it
+/// is ready.
+///
+/// The explicit data dir is the key to avoiding loopback-token 401s: the core
+/// writes its `runtime-token` there, and the client reads it back from the same
+/// known location ([tokenFilePath]) instead of guessing.
 ///
 /// Only a core that *we* started is terminated on dispose — a reused, externally
 /// managed core is left untouched.
@@ -26,14 +38,39 @@ class CoreProcessManager {
 
   Process? _process;
   bool _startedByUs = false;
+  String? _dataDir;
 
   String get baseUrl => 'http://$host:$port';
+
+  /// The data dir passed to the core via `--data-dir`, once resolved.
+  /// Null until [ensureRunning] has run.
+  String? get dataDir => _dataDir;
+
+  /// Absolute path to the loopback `runtime-token` file, once [dataDir] is
+  /// resolved. The client reads its bearer token from here.
+  String? get tokenFilePath =>
+      _dataDir == null ? null : _join(_dataDir!, 'runtime-token');
+
+  /// Resolve a stable, writable data dir for the sidecar core.
+  /// Uses the OS application-support directory so it is consistent across runs
+  /// and independent of the working directory.
+  Future<String> _resolveDataDir() async {
+    if (_dataDir != null) return _dataDir!;
+    final support = await getApplicationSupportDirectory();
+    final dir = _join(support.path, 'weft-core-data');
+    await Directory(dir).create(recursive: true);
+    _dataDir = dir;
+    return dir;
+  }
 
   /// Ensure a core is reachable. Returns when `/api/health` responds OK.
   ///
   /// Throws [CoreLaunchException] if the bundled binary can't be found or the
   /// core fails to become healthy within [startupTimeout].
   Future<void> ensureRunning() async {
+    // Resolve the data dir up front so [tokenFilePath] is available even when
+    // we end up reusing an externally-started core.
+    await _resolveDataDir();
     if (await _isHealthy()) {
       debugPrint('weft-core already running at $baseUrl — reusing it');
       return;
@@ -47,11 +84,11 @@ class CoreProcessManager {
       );
     }
 
-    debugPrint('starting weft-core: ${binary.path}');
+    debugPrint('starting weft-core: ${binary.path} (data-dir: $_dataDir)');
     try {
       _process = await Process.start(
         binary.path,
-        ['--port', '$port'],
+        ['--port', '$port', '--data-dir', _dataDir!],
         workingDirectory: binary.parent.path,
         // Detach stdio; the core logs to its own facilities.
         mode: ProcessStartMode.normal,
@@ -125,15 +162,15 @@ class CoreProcessManager {
 
     // 1 & 2: relative to the running Flutter executable.
     final appDir = File(Platform.resolvedExecutable).parent.path;
-    candidates.add(p.join(appDir, exeName));
-    candidates.add(p.join(appDir, 'weft-core', exeName));
-    candidates.add(p.join(appDir, 'data', 'flutter_assets', 'core', exeName));
+    candidates.add(_join(appDir, exeName));
+    candidates.add(_join(appDir, 'weft-core', exeName));
+    candidates.add(_join(appDir, 'data', 'flutter_assets', 'core', exeName));
 
     // 3: development — walk up to the repo root and look in target/.
     var dir = Directory.current;
     for (var i = 0; i < 6 && dir.parent.path != dir.path; i++) {
-      candidates.add(p.join(dir.path, 'target', 'release', exeName));
-      candidates.add(p.join(dir.path, 'target', 'debug', exeName));
+      candidates.add(_join(dir.path, 'target', 'release', exeName));
+      candidates.add(_join(dir.path, 'target', 'debug', exeName));
       dir = dir.parent;
     }
 

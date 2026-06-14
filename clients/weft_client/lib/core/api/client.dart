@@ -5,11 +5,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/error.dart';
+import '../providers/preferences_provider.dart';
 
 part 'client.g.dart';
 
 const _defaultBaseUrl = 'http://127.0.0.1:3004';
 const _runtimeTokenFileName = 'runtime-token';
+
+/// Authoritative path to the loopback `runtime-token`. When the client launches
+/// the core itself (sidecar mode) it sets this to the exact file the core wrote
+/// under its `--data-dir`, so requests read the right token instead of guessing
+/// among conventional locations (the root cause of 401s). Null = guess as before.
+String? runtimeTokenPathOverride;
 
 class _LoopbackAuthInterceptor extends Interceptor {
   @override
@@ -39,6 +46,12 @@ class _LoopbackAuthInterceptor extends Interceptor {
 
   Future<List<File>> _runtimeTokenCandidates() async {
     final candidates = <String>{};
+
+    // Authoritative location set by the sidecar manager — try it first.
+    final override = runtimeTokenPathOverride;
+    if (override != null && override.isNotEmpty) {
+      candidates.add(override);
+    }
 
     for (final dir in _repoDataDirs()) {
       candidates.add(_joinPath(dir, _runtimeTokenFileName));
@@ -128,8 +141,11 @@ class _LoopbackAuthInterceptor extends Interceptor {
 
 @riverpod
 Dio apiClient(Ref ref) {
+  // Watch the configured core address so changing it in Settings rebuilds the
+  // client (and everything depending on it) against the new base URL.
+  final base = ref.watch(preferencesProvider.select((p) => p.coreBaseUrl));
   final dio = Dio(BaseOptions(
-    baseUrl: _defaultBaseUrl,
+    baseUrl: base.isEmpty ? _defaultBaseUrl : base,
     connectTimeout: const Duration(seconds: 5),
     receiveTimeout: const Duration(seconds: 30),
     headers: {'Content-Type': 'application/json'},
@@ -170,6 +186,13 @@ class AppErrorInterceptor extends Interceptor {
         final message = _extractMessage(body) ??
             err.response?.statusMessage ??
             'HTTP $statusCode';
+        if (statusCode == 401) {
+          final detail = _extractMessage(body);
+          return AuthException(detail == null || detail.isEmpty
+              ? 'weft-core rejected the request (401): loopback token mismatch. '
+                  'Restart the app so the client re-reads the current token.'
+              : 'weft-core rejected the request (401): $detail');
+        }
         return ApiException(statusCode: statusCode, message: message);
       default:
         // unknown / cancel — wrap as offline so callers get a typed exception

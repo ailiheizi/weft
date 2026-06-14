@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
+import 'core/api/client.dart' show runtimeTokenPathOverride;
 import 'core/providers/chat_provider.dart';
 import 'core/providers/sessions_provider.dart';
 import 'core/runtime/core_process_manager.dart';
@@ -134,11 +135,18 @@ class _CoreStartupGateState extends State<CoreStartupGate> {
   @override
   void initState() {
     super.initState();
-    _startup = coreManager.ensureRunning();
+    _startup = _startCore();
+  }
+
+  Future<void> _startCore() async {
+    await coreManager.ensureRunning();
+    // Point the API client at the exact runtime-token the core just wrote,
+    // so authenticated requests don't 401 due to a path mismatch.
+    runtimeTokenPathOverride = coreManager.tokenFilePath;
   }
 
   void _retry() {
-    setState(() => _startup = coreManager.ensureRunning());
+    setState(() => _startup = _startCore());
   }
 
   @override

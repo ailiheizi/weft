@@ -1,6 +1,5 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -73,19 +72,9 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
               const Divider(height: 1),
-              _SettingTile(
-                icon: Icons.dns_outlined,
-                title: 'Core URL',
-                subtitle: 'http://127.0.0.1:3004',
-                trailing: Icon(Icons.copy_outlined,
-                    size: 15, color: theme.colorScheme.onSurfaceVariant),
-                onTap: () async {
-                  final messenger = ScaffoldMessenger.of(context);
-                  await Clipboard.setData(
-                      const ClipboardData(text: 'http://127.0.0.1:3004'));
-                  messenger.showSnackBar(
-                      const SnackBar(content: Text('已复制 Core URL')));
-                },
+              _CoreUrlTile(
+                url: prefs.coreBaseUrl,
+                onSave: (value) => prefsNotifier.setCoreBaseUrl(value),
               ),
               const Divider(height: 1),
               // 计数。
@@ -413,6 +402,70 @@ class _CatalogUrlTileState extends ConsumerState<_CatalogUrlTile> {
       subtitle: _url ?? '加载中…',
       trailing: const Icon(Icons.edit_outlined, size: 15),
       onTap: _edit,
+    );
+  }
+}
+
+/// 可编辑的 Core URL 设置项。改动写入偏好，apiClient 会随之重建并连到新地址。
+class _CoreUrlTile extends StatelessWidget {
+  const _CoreUrlTile({required this.url, required this.onSave});
+
+  final String url;
+  final Future<void> Function(String) onSave;
+
+  Future<void> _edit(BuildContext context) async {
+    final controller = TextEditingController(text: url);
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Core 连接地址'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'http://127.0.0.1:3004',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '默认连接本机自带的 weft-core。仅在连接远程 core 时才需要修改。',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+              onPressed: () =>
+                  Navigator.pop(ctx, 'http://127.0.0.1:3004'),
+              child: const Text('恢复默认')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('保存')),
+        ],
+      ),
+    );
+    if (result != null) {
+      await onSave(result);
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Core 地址已更新')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingTile(
+      icon: Icons.dns_outlined,
+      title: 'Core URL',
+      subtitle: url,
+      trailing: const Icon(Icons.edit_outlined, size: 15),
+      onTap: () => _edit(context),
     );
   }
 }

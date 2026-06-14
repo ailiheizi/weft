@@ -32,3 +32,23 @@ class ApiException extends AppException {
   @override
   String toString() => 'ApiException($statusCode): $message';
 }
+
+/// The request reached weft-core but was rejected by the loopback auth guard
+/// (HTTP 401). This means the client's bearer token did not match the core's
+/// runtime token — usually a stale/missing `runtime-token` file.
+class AuthException extends AppException {
+  const AuthException([
+    String message =
+        'weft-core rejected the request (401). The loopback token did not '
+        'match. Restart the app so the client re-reads the current token.',
+  ]) : _message = message;
+
+  final String _message;
+
+  @override
+  String get message => _message;
+
+  @override
+  String toString() => 'AuthException: $message';
+}
+

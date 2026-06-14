@@ -110,6 +110,16 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ),
 
+          // ── First-run signpost: no providers configured yet ──────────
+          if (providers.asData?.value.isEmpty ?? false)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  Spacing.lg, Spacing.sm, Spacing.lg, 0),
+              child: _GetStartedBanner(
+                onAdd: () => context.go('/providers'),
+              ),
+            ),
+
           // ── Apps section (scrolling) ──────────────────────────────────
           Expanded(
             child: ListView(
@@ -277,8 +287,60 @@ class _OfflineBanner extends StatelessWidget {
   }
 }
 
-// ── Stats card ───────────────────────────────────────────────────────────────
+// ── Get-started banner (no providers yet) ─────────────────────────────────────
+class _GetStartedBanner extends StatelessWidget {
+  const _GetStartedBanner({required this.onAdd});
+  final VoidCallback onAdd;
 
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accent = theme.colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accent.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.rocket_launch_outlined, color: accent, size: 18),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Add an AI provider to get started',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Weft needs at least one LLM provider and API key before you '
+                  'can chat.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          FilledButton.icon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add provider'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Stats card ───────────────────────────────────────────────────────────────
 class _StatCard<T> extends StatelessWidget {
   const _StatCard({
     required this.icon,

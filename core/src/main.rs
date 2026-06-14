@@ -651,7 +651,10 @@ async fn main() -> anyhow::Result<()> {
         let host_state = WasmHostState {
             config: shared_config.clone(),
             pipeline: shared_pipeline.clone(),
-            runtime_handle: tokio::runtime::Handle::current(),
+            // Dedicated runtime for WASM host-function blocking calls — keeps
+            // nested host block_on (capability dispatch + 60s HTTP egress) off
+            // the main HTTP runtime so /health and other handlers stay live.
+            runtime_handle: weft_core::package::bridge::host_blocking_handle(),
             process_manager: process_manager.clone(),
             vkey_store: vkey_store.clone(),
             kv_store: kv_store.clone(),

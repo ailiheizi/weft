@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/models/chat.dart';
@@ -9,6 +10,7 @@ import '../../core/providers/chat_provider.dart';
 import '../../core/providers/data_providers.dart';
 import '../../core/providers/sessions_provider.dart';
 import '../../shared/widgets/glass_card.dart';
+import '../../shared/widgets/empty_state.dart';
 import 'workspace/artifact.dart';
 import 'workspace/workspace_panel.dart';
 
@@ -335,6 +337,8 @@ class _ChatArea extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(chatProvider(sessionId));
+    final noProviders =
+        ref.watch(providersProvider).asData?.value.isEmpty ?? false;
 
     if (session.isStreaming) {
       scrollToBottom();
@@ -345,14 +349,16 @@ class _ChatArea extends ConsumerWidget {
         _TopBar(session: session, sessionId: sessionId),
         const Divider(height: 1),
         Expanded(
-          child: session.messages.isEmpty
-              ? _EmptyState(session: session)
-              : _MessageList(
-                  messages: session.messages,
-                  isStreaming: session.isStreaming,
-                  scrollController: scrollController,
-                  cursorController: cursorController,
-                ),
+          child: noProviders && session.messages.isEmpty
+              ? const _NoProviderState()
+              : session.messages.isEmpty
+                  ? _EmptyState(session: session)
+                  : _MessageList(
+                      messages: session.messages,
+                      isStreaming: session.isStreaming,
+                      scrollController: scrollController,
+                      cursorController: cursorController,
+                    ),
         ),
         const Divider(height: 1),
         _InputBar(
@@ -360,6 +366,8 @@ class _ChatArea extends ConsumerWidget {
           isStreaming: session.isStreaming,
           onSend: onSend,
           onStop: onStop,
+          disabledHint:
+              noProviders ? 'Add an AI provider in Settings to start chatting' : null,
         ),
       ],
     );
@@ -1122,6 +1130,27 @@ class _AssistantContent extends StatelessWidget {
   }
 }
 
+// ─── 无 Provider 引导态 ───────────────────────────────────────────────────────
+
+class _NoProviderState extends StatelessWidget {
+  const _NoProviderState();
+
+  @override
+  Widget build(BuildContext context) {
+    return EmptyState(
+      icon: Icons.bolt_outlined,
+      title: 'No AI provider configured',
+      subtitle:
+          'Add a provider and API key before you can chat. It only takes a minute.',
+      action: FilledButton.icon(
+        onPressed: () => context.go('/providers'),
+        icon: const Icon(Icons.add, size: 16),
+        label: const Text('Add provider'),
+      ),
+    );
+  }
+}
+
 // ─── 底部输入栏 ───────────────────────────────────────────────────────────────
 
 class _InputBar extends StatelessWidget {
@@ -1130,6 +1159,7 @@ class _InputBar extends StatelessWidget {
     required this.isStreaming,
     required this.onSend,
     required this.onStop,
+    this.disabledHint,
   });
 
   final TextEditingController controller;
@@ -1137,9 +1167,15 @@ class _InputBar extends StatelessWidget {
   final VoidCallback onSend;
   final VoidCallback onStop;
 
+  /// When set, the composer is disabled and this hint explains why
+  /// (e.g. no provider configured yet).
+  final String? disabledHint;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final disabled = disabledHint != null;
+    final inputDisabled = isStreaming || disabled;
 
     return Padding(
       padding: const EdgeInsets.all(12),
@@ -1148,12 +1184,16 @@ class _InputBar extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
-              enabled: !isStreaming,
+              enabled: !inputDisabled,
               maxLines: null,
               keyboardType: TextInputType.multiline,
               textInputAction: TextInputAction.newline,
               decoration: InputDecoration(
-                hintText: isStreaming ? 'Generating…' : 'Type a message…  (/team 强制组建团队)',
+                hintText: disabled
+                    ? disabledHint
+                    : isStreaming
+                        ? 'Generating…'
+                        : 'Type a message…  (/team 强制组建团队)',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: theme.colorScheme.outline),
@@ -1162,7 +1202,7 @@ class _InputBar extends StatelessWidget {
                     horizontal: 14, vertical: 10),
                 isDense: true,
               ),
-              onSubmitted: isStreaming ? null : (_) => onSend(),
+              onSubmitted: inputDisabled ? null : (_) => onSend(),
             ),
           ),
           const SizedBox(width: 8),
@@ -1178,7 +1218,7 @@ class _InputBar extends StatelessWidget {
             )
           else
             IconButton.filled(
-              onPressed: onSend,
+              onPressed: disabled ? null : onSend,
               icon: const Icon(Icons.send_rounded),
               tooltip: 'Send',
             ),
