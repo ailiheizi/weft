@@ -123,6 +123,11 @@ jobs:
 
       - name: Build Flutter client
         working-directory: clients/weft_client
+        # The webview_windows plugin still includes <experimental/coroutine>,
+        # which recent MSVC toolchains turn into a hard error (STL1011). Inject
+        # the documented silence macro via the CL env var so MSVC accepts it.
+        env:
+          CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
         run: |
           flutter pub get
           flutter build windows --release
