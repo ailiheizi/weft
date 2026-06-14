@@ -10,6 +10,7 @@ class AppPreferences {
     this.showSparkline = true,
     this.enableAnimations = true,
     this.coreBaseUrl = 'http://127.0.0.1:3004',
+    this.onboardingCompleted = false,
   });
 
   /// Dashboard 统计卡是否显示 sparkline 趋势图。
@@ -21,15 +22,20 @@ class AppPreferences {
   /// weft-core 的连接地址。默认本地 sidecar；高级用户可指向远程 core。
   final String coreBaseUrl;
 
+  /// 是否已完成首次启动引导 (OOBE)。
+  final bool onboardingCompleted;
+
   AppPreferences copyWith({
     bool? showSparkline,
     bool? enableAnimations,
     String? coreBaseUrl,
+    bool? onboardingCompleted,
   }) {
     return AppPreferences(
       showSparkline: showSparkline ?? this.showSparkline,
       enableAnimations: enableAnimations ?? this.enableAnimations,
       coreBaseUrl: coreBaseUrl ?? this.coreBaseUrl,
+      onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
     );
   }
 }
@@ -42,6 +48,7 @@ class PreferencesNotifier extends StateNotifier<AppPreferences> {
   static const _kSparkline = 'pref_show_sparkline';
   static const _kAnimations = 'pref_enable_animations';
   static const _kCoreBaseUrl = 'pref_core_base_url';
+  static const _kOnboardingCompleted = 'pref_onboarding_completed';
   static const _defaultCoreBaseUrl = 'http://127.0.0.1:3004';
 
   Future<void> _load() async {
@@ -50,7 +57,15 @@ class PreferencesNotifier extends StateNotifier<AppPreferences> {
       showSparkline: prefs.getBool(_kSparkline) ?? true,
       enableAnimations: prefs.getBool(_kAnimations) ?? true,
       coreBaseUrl: prefs.getString(_kCoreBaseUrl) ?? _defaultCoreBaseUrl,
+      onboardingCompleted: prefs.getBool(_kOnboardingCompleted) ?? false,
     );
+  }
+
+  /// 标记首次启动引导已完成（或重置为未完成）。
+  Future<void> setOnboardingCompleted(bool value) async {
+    state = state.copyWith(onboardingCompleted: value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kOnboardingCompleted, value);
   }
 
   Future<void> setShowSparkline(bool value) async {

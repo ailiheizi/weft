@@ -6,8 +6,11 @@ import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
 import 'core/api/client.dart' show runtimeTokenPathOverride;
 import 'core/providers/chat_provider.dart';
+import 'core/providers/data_providers.dart' show providersProvider;
+import 'core/providers/preferences_provider.dart';
 import 'core/providers/sessions_provider.dart';
 import 'core/runtime/core_process_manager.dart';
+import 'features/onboarding/onboarding_view.dart';
 import 'shared/theme/app_theme.dart';
 import 'shared/theme/router.dart';
 import 'shared/widgets/glass_backdrop.dart';
@@ -178,7 +181,7 @@ class _CoreStartupGateState extends State<CoreStartupGate> {
               ),
             );
           }
-          return widget.child;
+          return _OnboardingGate(child: widget.child);
         }
         return const _StartupScaffold(
           child: Column(
@@ -208,6 +211,56 @@ class _StartupScaffold extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(body: Center(child: child)),
+    );
+  }
+}
+
+/// Shows the first-run onboarding (OOBE) before the main app when the user has
+/// not completed it AND has no providers configured. Once done (or skipped),
+/// the main app is shown for the rest of the session.
+class _OnboardingGate extends ConsumerStatefulWidget {
+  const _OnboardingGate({required this.child});
+  final Widget child;
+
+  @override
+  ConsumerState<_OnboardingGate> createState() => _OnboardingGateState();
+}
+
+class _OnboardingGateState extends ConsumerState<_OnboardingGate> {
+  bool _dismissed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_dismissed) return widget.child;
+
+    final completed =
+        ref.watch(preferencesProvider.select((p) => p.onboardingCompleted));
+    if (completed) return widget.child;
+
+    // Wait for the provider list so we don't flash onboarding for users who
+    // already have providers (e.g. a returning user on a fresh prefs store).
+    final providers = ref.watch(providersProvider);
+    return providers.when(
+      loading: () => const _StartupScaffold(
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: CircularProgressIndicator(strokeWidth: 3),
+        ),
+      ),
+      // If we can't reach the provider list, fall through to the app rather
+      // than trapping the user in onboarding.
+      error: (_, _) => widget.child,
+      data: (list) {
+        if (list.isNotEmpty) return widget.child;
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.dark,
+          home: OnboardingView(
+            onComplete: () => setState(() => _dismissed = true),
+          ),
+        );
+      },
     );
   }
 }
