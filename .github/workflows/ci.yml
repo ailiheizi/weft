@@ -1,10 +1,9 @@
 name: CI
 
-# Runs only on version tags (v*) and manual dispatch — NOT on every push —
-# to conserve GitHub Actions minutes. Validate locally before tagging.
+# Manual-only. The Release workflow (triggered by v* tags) already builds and
+# tests everything, so CI does not run on tags or pushes — run it by hand from
+# the Actions tab when you want a standalone build/test check. Conserves minutes.
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
 
 env:
