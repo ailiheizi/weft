@@ -6,12 +6,33 @@ import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
 import 'core/providers/chat_provider.dart';
 import 'core/providers/sessions_provider.dart';
+import 'core/runtime/core_process_manager.dart';
 import 'shared/theme/app_theme.dart';
 import 'shared/theme/router.dart';
 import 'shared/widgets/glass_backdrop.dart';
 
 // Global navigator key so VM Service extensions can access the router
 final navigatorKey = GlobalKey<NavigatorState>();
+
+// Bundled weft-core sidecar; started before the UI, stopped on exit.
+final coreManager = CoreProcessManager();
+
+/// Stops the bundled core when the window is closed, then lets the app exit.
+class _CoreShutdownListener extends WindowListener {
+  bool _closing = false;
+
+  @override
+  void onWindowClose() async {
+    if (_closing) return;
+    _closing = true;
+    try {
+      await coreManager.dispose();
+    } finally {
+      await windowManager.setPreventClose(false);
+      await windowManager.destroy();
+    }
+  }
+}
 
 // Global ProviderContainer reference for VM extensions
 ProviderContainer? _container;
@@ -71,6 +92,10 @@ void main() async {
   _registerVmExtensions();
   await windowManager.ensureInitialized();
 
+  // Intercept window close so we can stop the sidecar core before exiting.
+  await windowManager.setPreventClose(true);
+  windowManager.addListener(_CoreShutdownListener());
+
   windowManager.waitUntilReadyToShow(
     const WindowOptions(
       minimumSize: Size(900, 600),
@@ -85,7 +110,98 @@ void main() async {
 
   final container = ProviderContainer();
   _container = container;
-  runApp(UncontrolledProviderScope(container: container, child: const WeftApp()));
+  runApp(UncontrolledProviderScope(
+    container: container,
+    child: const CoreStartupGate(child: WeftApp()),
+  ));
+}
+
+/// Starts the bundled weft-core before showing the app. While the core is
+/// coming up a splash is shown; if it fails to start, an error with a retry
+/// button is shown instead. A core already running externally is reused.
+class CoreStartupGate extends StatefulWidget {
+  const CoreStartupGate({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<CoreStartupGate> createState() => _CoreStartupGateState();
+}
+
+class _CoreStartupGateState extends State<CoreStartupGate> {
+  late Future<void> _startup;
+
+  @override
+  void initState() {
+    super.initState();
+    _startup = coreManager.ensureRunning();
+  }
+
+  void _retry() {
+    setState(() => _startup = coreManager.ensureRunning());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _startup,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done) {
+          if (snapshot.hasError) {
+            return _StartupScaffold(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, size: 48),
+                  const SizedBox(height: 16),
+                  const Text('Failed to start weft-core'),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      '${snapshot.error}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(onPressed: _retry, child: const Text('Retry')),
+                ],
+              ),
+            );
+          }
+          return widget.child;
+        }
+        return const _StartupScaffold(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 36,
+                height: 36,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+              SizedBox(height: 20),
+              Text('Starting weft-core…'),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StartupScaffold extends StatelessWidget {
+  const _StartupScaffold({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(body: Center(child: child)),
+    );
+  }
 }
 
 class WeftApp extends ConsumerWidget {

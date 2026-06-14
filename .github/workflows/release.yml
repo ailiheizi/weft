@@ -95,10 +95,73 @@ jobs:
           name: weft-packages
           path: weft-packages.tar.gz
 
+  # ---- 2b. Bundle the desktop app: Flutter client + core + WASM packages ----
+  # Produces a ready-to-run Windows bundle where the client auto-launches the
+  # bundled weft-core (sidecar) — no separate install needed.
+  app-windows:
+    name: desktop app (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc, wasm32-wasip1
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build core (release)
+        run: cargo build --release --target x86_64-pc-windows-msvc -p weft-core
+
+      - name: Build WASM packages
+        shell: bash
+        run: bash scripts/build-wasm-packages.sh
+
+      - name: Build Flutter client
+        working-directory: clients/weft_client
+        run: |
+          flutter pub get
+          flutter build windows --release
+
+      - name: Assemble bundle
+        shell: bash
+        run: |
+          bundle="weft-desktop-windows-x86_64"
+          app="clients/weft_client/build/windows/x64/runner/Release"
+          mkdir -p "$bundle"
+          cp -r "$app"/* "$bundle"/
+          # Sidecar core next to the client exe (matches CoreProcessManager search).
+          cp target/x86_64-pc-windows-msvc/release/weft-core.exe "$bundle"/
+          for b in weft weft-sign weft-rpc; do
+            [ -f "target/x86_64-pc-windows-msvc/release/$b.exe" ] && cp "target/x86_64-pc-windows-msvc/release/$b.exe" "$bundle"/ || true
+          done
+          # Package metadata + compiled wasm so the core can load packages.
+          mkdir -p "$bundle/packages"
+          cp packages/index.toml "$bundle/packages"/ 2>/dev/null || true
+          for d in packages/official/*/; do
+            name=$(basename "$d")
+            if [ -f "$d/package.wasm" ]; then
+              mkdir -p "$bundle/packages/official/$name"
+              cp "$d/package.toml" "$bundle/packages/official/$name"/ 2>/dev/null || true
+              cp "$d/package.wasm" "$bundle/packages/official/$name"/
+            fi
+          done
+          cp config.example.toml "$bundle"/ 2>/dev/null || true
+          7z a "$bundle.zip" "./$bundle/*"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: weft-desktop-windows-x86_64
+          path: weft-desktop-windows-x86_64.zip
+
   # ---- 3. Publish the GitHub Release with all artifacts ---------------------
   release:
     name: publish release
-    needs: [core, packages]
+    needs: [core, packages, app-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
