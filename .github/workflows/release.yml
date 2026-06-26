@@ -13,7 +13,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # ---- 1. Build the native core binaries on each platform -------------------
+  # ---- 1. Build the native core binaries -----------------------------------
+  # Windows-only for now. macOS/Linux targets are unverified — add them back to
+  # the matrix once they're tested.
   core:
     name: core (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
@@ -24,12 +26,6 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive: weft-core-windows-x86_64
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            archive: weft-core-macos-aarch64
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            archive: weft-core-linux-x86_64
     steps:
       - uses: actions/checkout@v4
 
