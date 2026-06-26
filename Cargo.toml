@@ -1,6 +1,8 @@
 [workspace]
+# NOTE: `core` is its own workspace root (see core/Cargo.toml) and is built
+# separately — it must not be a member here, or cargo errors with
+# "multiple workspace roots found in the same workspace".
 members = [
-    "core",
     "packages/sdk",
     "crates/weft-code-runtime",
 ]

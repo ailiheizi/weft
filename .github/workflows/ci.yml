@@ -24,13 +24,20 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Build workspace
+      - name: Build workspace (sdk + code-runtime)
         run: cargo build --workspace --verbose
+
+      # `core` is its own workspace root (core/Cargo.toml has [workspace]),
+      # so it is built separately from its own directory.
+      - name: Build core
+        working-directory: core
+        run: cargo build --verbose
 
       # weft-package-sdk depends on extism-pdk host imports that only resolve
       # under wasm32 targets, so its test binary cannot link natively. Test the
       # native crates only.
-      - name: Test (native crates)
+      - name: Test core
+        working-directory: core
         # The skipped tests are pre-existing failures inherited from the
         # upstream workspace (they fail there too — verified against the source
         # tree). They depend on runtime-only artifacts that are intentionally
@@ -40,7 +47,7 @@ jobs:
         #   - a UI static route not registered in build_router
         # Source is left untouched; we skip them at the CI layer instead.
         run: >
-          cargo test -p weft-core -p weft-code-runtime --
+          cargo test --
           --skip instance_config_loader_reads_instance_config_path
           --skip package_ui_route_serves_installed_package_assets_from_repo_root
           --skip test_load_instance_config_reads_weft_claw_runtime_settings

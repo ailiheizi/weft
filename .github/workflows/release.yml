@@ -40,13 +40,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Build core binaries
-        run: cargo build --release --target ${{ matrix.target }} -p weft-core
+        # `core` is its own workspace root, so build from its directory.
+        working-directory: core
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Stage artifacts
         shell: bash
         run: |
           mkdir -p dist
-          bin_dir="target/${{ matrix.target }}/release"
+          bin_dir="core/target/${{ matrix.target }}/release"
           for b in weft-core weft weft-sign weft-rpc; do
             if [[ -f "$bin_dir/$b" ]]; then cp "$bin_dir/$b" dist/; fi
             if [[ -f "$bin_dir/$b.exe" ]]; then cp "$bin_dir/$b.exe" dist/; fi
@@ -115,7 +117,9 @@ jobs:
           channel: stable
 
       - name: Build core (release)
-        run: cargo build --release --target x86_64-pc-windows-msvc -p weft-core
+        # `core` is its own workspace root, so build from its directory.
+        working-directory: core
+        run: cargo build --release --target x86_64-pc-windows-msvc
 
       - name: Build WASM packages
         shell: bash
@@ -140,9 +144,9 @@ jobs:
           mkdir -p "$bundle"
           cp -r "$app"/* "$bundle"/
           # Sidecar core next to the client exe (matches CoreProcessManager search).
-          cp target/x86_64-pc-windows-msvc/release/weft-core.exe "$bundle"/
+          cp core/target/x86_64-pc-windows-msvc/release/weft-core.exe "$bundle"/
           for b in weft weft-sign weft-rpc; do
-            [ -f "target/x86_64-pc-windows-msvc/release/$b.exe" ] && cp "target/x86_64-pc-windows-msvc/release/$b.exe" "$bundle"/ || true
+            [ -f "core/target/x86_64-pc-windows-msvc/release/$b.exe" ] && cp "core/target/x86_64-pc-windows-msvc/release/$b.exe" "$bundle"/ || true
           done
           # Package metadata + compiled wasm so the core can load packages.
           mkdir -p "$bundle/packages"
