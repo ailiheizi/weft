@@ -38,6 +38,23 @@ class GlassTokens {
   /// 卡片内嵌小块（图标 tile / 代码块）内凹填充。
   static const Color innerTileFill = Color(0xFF0A0B0E);
 
+  // ── 主题感知解析(亮/暗自动取对应 ColorScheme 令牌) ──────────────────────
+  // 暗色常量与暗色 ColorScheme 的 surface 令牌一致;亮色走 ColorScheme 自然变浅。
+  static Color fillOf(BuildContext c) =>
+      Theme.of(c).colorScheme.surfaceContainer;
+  static Color fillRaisedOf(BuildContext c) =>
+      Theme.of(c).colorScheme.surfaceContainerHigh;
+  static Color fillFlatOf(BuildContext c) =>
+      Theme.of(c).colorScheme.surface;
+  static Color innerTileFillOf(BuildContext c) =>
+      Theme.of(c).colorScheme.surfaceContainerLowest;
+  static Color borderIdleOf(BuildContext c) =>
+      Theme.of(c).colorScheme.outline;
+  static Color borderHoverOf(BuildContext c) =>
+      Theme.of(c).colorScheme.outlineVariant == Theme.of(c).colorScheme.outline
+          ? Theme.of(c).colorScheme.outline
+          : Theme.of(c).colorScheme.onSurfaceVariant.withValues(alpha: 0.3);
+
   /// 双层阴影：贴地接触阴影 + 远投柔影（深底上更明显）。
   static const List<BoxShadow> shadows = [
     BoxShadow(color: Color(0x66000000), blurRadius: 1, offset: Offset(0, 1)),
@@ -80,9 +97,9 @@ class GlassCard extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: r,
-        color: elevated ? GlassTokens.fillRaised : GlassTokens.fill,
+        color: elevated ? GlassTokens.fillRaisedOf(context) : GlassTokens.fillOf(context),
         border: Border.all(
-          color: borderColor ?? GlassTokens.borderIdle,
+          color: borderColor ?? GlassTokens.borderIdleOf(context),
           width: 1,
         ),
         boxShadow: GlassTokens.shadows,

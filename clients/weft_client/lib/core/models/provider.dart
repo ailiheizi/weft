@@ -11,6 +11,7 @@ abstract class ProviderConfig with _$ProviderConfig {
     @Default('openai') String format,
     @Default([]) List<String> models,
     @Default([]) List<ApiKeyConfig> keys,
+    @JsonKey(name: 'key_count') @Default(0) int keyCount,
   }) = _ProviderConfig;
 
   factory ProviderConfig.fromJson(Map<String, dynamic> json) =>

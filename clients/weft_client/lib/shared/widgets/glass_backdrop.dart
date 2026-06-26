@@ -29,13 +29,15 @@ class _Ambience extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const DecoratedBox(
+    final scheme = Theme.of(context).colorScheme;
+    // 顶部略微抬升一档,底部回到画布色;暗亮主题都自然成立。
+    return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF13151B), Color(0xFF0E0F13)],
-          stops: [0.0, 0.5],
+          colors: [scheme.surfaceContainerHigh, scheme.surfaceContainerLow],
+          stops: const [0.0, 0.5],
         ),
       ),
     );

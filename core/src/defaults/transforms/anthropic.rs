@@ -339,6 +339,7 @@ mod tests {
             keys: vec![ApiKeyConfig {
                 value: "sk-ant-test".into(),
                 label: None,
+                enabled: true,
             }],
             models: vec!["claude-sonnet-4-20250514".into()],
         }

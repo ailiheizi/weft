@@ -8,6 +8,7 @@ pub struct ApiKeyState {
     pub index: usize,
     pub value: String,
     pub label: Option<String>,
+    pub enabled: bool,
     pub failed: bool,
     pub usage_count: u64,
 }
@@ -18,6 +19,7 @@ impl From<(usize, &ApiKeyConfig)> for ApiKeyState {
             index,
             value: cfg.value.clone(),
             label: cfg.label.clone(),
+            enabled: cfg.enabled,
             failed: false,
             usage_count: 0,
         }

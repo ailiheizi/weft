@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -9,8 +10,10 @@ class AppPreferences {
   const AppPreferences({
     this.showSparkline = true,
     this.enableAnimations = true,
-    this.coreBaseUrl = 'http://127.0.0.1:3004',
+    this.coreBaseUrl = 'http://127.0.0.1:17830',
     this.onboardingCompleted = false,
+    this.themeMode = ThemeMode.dark,
+    this.workspaceDir = '',
   });
 
   /// Dashboard 统计卡是否显示 sparkline 趋势图。
@@ -25,17 +28,27 @@ class AppPreferences {
   /// 是否已完成首次启动引导 (OOBE)。
   final bool onboardingCompleted;
 
+  /// 主题模式：暗 / 亮 / 跟随系统。默认暗色(保持原体验)。
+  final ThemeMode themeMode;
+
+  /// AI 文件操作的工作目录。为空时使用默认 data/workspaces/<session_id>。
+  final String workspaceDir;
+
   AppPreferences copyWith({
     bool? showSparkline,
     bool? enableAnimations,
     String? coreBaseUrl,
     bool? onboardingCompleted,
+    ThemeMode? themeMode,
+    String? workspaceDir,
   }) {
     return AppPreferences(
       showSparkline: showSparkline ?? this.showSparkline,
       enableAnimations: enableAnimations ?? this.enableAnimations,
       coreBaseUrl: coreBaseUrl ?? this.coreBaseUrl,
       onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
+      themeMode: themeMode ?? this.themeMode,
+      workspaceDir: workspaceDir ?? this.workspaceDir,
     );
   }
 }
@@ -49,7 +62,20 @@ class PreferencesNotifier extends StateNotifier<AppPreferences> {
   static const _kAnimations = 'pref_enable_animations';
   static const _kCoreBaseUrl = 'pref_core_base_url';
   static const _kOnboardingCompleted = 'pref_onboarding_completed';
-  static const _defaultCoreBaseUrl = 'http://127.0.0.1:3004';
+  static const _kThemeMode = 'pref_theme_mode';
+  static const _kWorkspaceDir = 'pref_workspace_dir';
+  static const _defaultCoreBaseUrl = 'http://127.0.0.1:17830';
+
+  static ThemeMode _parseThemeMode(String? v) {
+    switch (v) {
+      case 'light':
+        return ThemeMode.light;
+      case 'system':
+        return ThemeMode.system;
+      default:
+        return ThemeMode.dark;
+    }
+  }
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -58,7 +84,16 @@ class PreferencesNotifier extends StateNotifier<AppPreferences> {
       enableAnimations: prefs.getBool(_kAnimations) ?? true,
       coreBaseUrl: prefs.getString(_kCoreBaseUrl) ?? _defaultCoreBaseUrl,
       onboardingCompleted: prefs.getBool(_kOnboardingCompleted) ?? false,
+      themeMode: _parseThemeMode(prefs.getString(_kThemeMode)),
+      workspaceDir: prefs.getString(_kWorkspaceDir) ?? '',
     );
+  }
+
+  /// 设置主题模式并持久化。
+  Future<void> setThemeMode(ThemeMode mode) async {
+    state = state.copyWith(themeMode: mode);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kThemeMode, mode.name);
   }
 
   /// 标记首次启动引导已完成（或重置为未完成）。
@@ -86,6 +121,13 @@ class PreferencesNotifier extends StateNotifier<AppPreferences> {
     state = state.copyWith(coreBaseUrl: url);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kCoreBaseUrl, url);
+  }
+
+  /// 设置 AI 文件操作的工作目录；空值表示使用默认(data/workspaces/<sid>)。
+  Future<void> setWorkspaceDir(String value) async {
+    state = state.copyWith(workspaceDir: value.trim());
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kWorkspaceDir, value.trim());
   }
 }
 

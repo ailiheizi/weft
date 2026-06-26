@@ -139,4 +139,46 @@ class ChatStorage {
     final json = jsonEncode(metas.map((m) => m.toJson()).toList());
     await file.writeAsString(json, flush: true);
   }
+
+  // ── 每会话的 provider/model 选择持久化 ─────────────────────────────────────
+  // 存一个 map 文件:`appDocDir/.weft_client/session_prefs.json`
+  // 结构: { "<sessionId>": {"provider": "...", "model": "..."} }
+
+  Future<File> _prefsFile() async {
+    final base = await _baseDir();
+    return File('${base.path}/session_prefs.json');
+  }
+
+  Future<Map<String, dynamic>> _loadPrefsMap() async {
+    final file = await _prefsFile();
+    if (!await file.exists()) return {};
+    try {
+      return jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// 读取某会话上次选择的 (provider, model)。
+  Future<({String? provider, String? model})> loadSessionPrefs(
+      String sessionId) async {
+    final map = await _loadPrefsMap();
+    final entry = map[sessionId];
+    if (entry is Map<String, dynamic>) {
+      return (
+        provider: entry['provider'] as String?,
+        model: entry['model'] as String?,
+      );
+    }
+    return (provider: null, model: null);
+  }
+
+  /// 保存某会话的 (provider, model) 选择。
+  Future<void> saveSessionPrefs(
+      String sessionId, String? provider, String? model) async {
+    final map = await _loadPrefsMap();
+    map[sessionId] = {'provider': provider, 'model': model};
+    final file = await _prefsFile();
+    await file.writeAsString(jsonEncode(map), flush: true);
+  }
 }

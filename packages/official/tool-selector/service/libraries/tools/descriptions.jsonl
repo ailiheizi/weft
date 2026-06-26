@@ -1,0 +1,6 @@
+{"id": "web_search", "name": "网页搜索", "description": "搜索互联网获取最新信息 web search internet query 查天气 查新闻 搜索资料 查询 找信息 看看今天", "endpoint": "search_api"}
+{"id": "calculator", "name": "计算器", "description": "数学计算 math calculate 算数 求解方程 单位转换 面积 体积 加减乘除 公式 sin cos 开方", "endpoint": "calc_api"}
+{"id": "code_run", "name": "代码执行", "description": "运行代码 execute code run script 执行Python 跑程序 测试脚本 debug 调试 编程", "endpoint": "sandbox_api"}
+{"id": "image_gen", "name": "图像生成", "description": "生成图片 draw image generate picture 画画 绘图 画一只 画一个 插画 设计图 AI绘画", "endpoint": "dalle_api"}
+{"id": "file_read", "name": "文件读取", "description": "读取文件 read file open document 打开文档 查看内容 读PDF 看文件 本地文件", "endpoint": "file_api"}
+{"id": "translate", "name": "翻译", "description": "翻译 translate 中译英 英译中 多语言翻译 把这段翻译成 language conversion 语言转换", "endpoint": "translate_api"}

@@ -55,11 +55,23 @@ fn generate(data: &serde_json::Value) -> PackageResult {
     let base_url = data
         .get("base_url")
         .and_then(|v| v.as_str())
-        .unwrap_or("https://api.apiyi.com")
-        .trim_end_matches('/');
-    let api_key = data.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
+        .map(|s| s.to_string())
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| env_get("WEFT_IMAGE_BASE_URL").filter(|s| !s.trim().is_empty()))
+        .unwrap_or_else(|| "https://api.apiyi.com".to_string());
+    let base_url = base_url.trim_end_matches('/');
+    // api_key 优先用参数，缺省回退到 Core 环境变量（前端不持有密钥）。
+    let api_key = data
+        .get("api_key")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| env_get("WEFT_IMAGE_API_KEY").filter(|s| !s.trim().is_empty()))
+        .unwrap_or_default();
     if api_key.trim().is_empty() {
-        return PackageResult::err("generate requires 'api_key'");
+        return PackageResult::err(
+            "generate requires 'api_key' (传参或设置 WEFT_IMAGE_API_KEY 环境变量)",
+        );
     }
     let model = data
         .get("model")

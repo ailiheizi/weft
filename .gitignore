@@ -79,11 +79,15 @@ packages/official/companion-core/
 
 # ===== 模型权重（体积大，应通过 release / 运行时下载，不进 git）=====
 *.onnx
+*.onnx.data
+*.onnx_data
 *.gguf
 *.safetensors
 *.bin
 *.pt
 *.pth
+# tool-selector 的分词器（17MB，随模型一起运行时获取）
+packages/official/tool-selector/service/models/tokenizer.json
 
 # ===== IDE / 工具缓存 =====
 .idea/
@@ -92,3 +96,6 @@ packages/official/companion-core/
 .weft/
 .DS_Store
 Thumbs.db
+
+# ===== 原始展示素材（含视频，体积大；仅 docs/images 下的精简截图进仓库）=====
+showcase/

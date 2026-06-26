@@ -119,6 +119,15 @@ impl ProcessManager {
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 
+        // Windows: 隐藏子进程 console 窗口(FFI 嵌入模式下 parent 是 GUI app,
+        // 不加这个每个 service 都弹黑框)。
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+
         tracing::info!(
             "Starting service '{}' with command='{}' args={:?} cwd={:?}",
             name,
@@ -204,11 +213,14 @@ impl ProcessManager {
             tracing::info!("Stopping service '{}'", name);
             #[cfg(windows)]
             {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x08000000;
                 let pid = child.id();
                 let _ = Command::new("taskkill")
                     .args(["/PID", &pid.to_string(), "/T", "/F"])
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
+                    .creation_flags(CREATE_NO_WINDOW)
                     .status();
             }
             #[cfg(not(windows))]

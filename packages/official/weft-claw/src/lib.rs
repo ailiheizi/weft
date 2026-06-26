@@ -33,6 +33,8 @@ struct SendMessageInput {
     delegate_request: Value,
     #[serde(default)]
     runtime_context: Value,
+    #[serde(default)]
+    selected_tools: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -283,6 +285,10 @@ fn do_send_message(input: SendMessageInput) -> PackageResult {
     }
     payload["runtime_context"] = runtime_context;
 
+    if !input.selected_tools.is_empty() {
+        payload["selected_tools"] = serde_json::json!(input.selected_tools);
+    }
+
     match call_agent_runtime("send_session_message", &payload) {
         Ok(agent_result) => {
             let reply = agent_result
@@ -367,6 +373,56 @@ fn do_delete_session_events(input: SessionIdInput) -> PackageResult {
     }
 }
 
+/// 批量删除会话:接受 {session_ids:[...]} 或 {all:true}(清空全部)。
+/// 逐个调用 delete_agent_session + delete_session_events,返回成功/失败计数。
+fn do_delete_sessions(data: Value) -> PackageResult {
+    let mut ids: Vec<String> = data
+        .get("session_ids")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .filter(|s| !s.trim().is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let clear_all = data.get("all").and_then(Value::as_bool).unwrap_or(false);
+    if clear_all {
+        if let Ok(value) = call_agent_runtime("list_sessions", &serde_json::json!({})) {
+            if let Some(arr) = value.get("sessions").and_then(Value::as_array) {
+                ids = arr
+                    .iter()
+                    .filter_map(|s| s.get("id").and_then(Value::as_str).map(str::to_string))
+                    .filter(|s| !s.trim().is_empty())
+                    .collect();
+            }
+        }
+    }
+
+    if ids.is_empty() {
+        return PackageResult::err("delete_sessions requires non-empty session_ids or all=true");
+    }
+
+    let mut deleted = 0u64;
+    let mut failed: Vec<String> = Vec::new();
+    for id in &ids {
+        let agent_ok = delete_agent_session(id).is_ok();
+        let _ = delete_session_events(id);
+        if agent_ok {
+            deleted += 1;
+        } else {
+            failed.push(id.clone());
+        }
+    }
+
+    ok_turn(serde_json::json!({
+        "deleted": deleted,
+        "requested": ids.len(),
+        "failed": failed,
+    }))
+}
+
 fn do_reset_session(input: SessionIdInput) -> PackageResult {
     if input.session_id.trim().is_empty() {
         return PackageResult::err("reset_session requires session_id");
@@ -443,6 +499,58 @@ fn do_cancel_turn(data: Value) -> PackageResult {
     }))
 }
 
+/// Call selector via HTTP (assumes selector HTTP server running on port 17860).
+/// If not running, spawns it as a background process first.
+fn do_select_tools(data: Value) -> PackageResult {
+    let query = data.get("query").and_then(Value::as_str).unwrap_or("");
+    if query.is_empty() {
+        return PackageResult::err("query is required");
+    }
+    let library = data.get("library").and_then(Value::as_str).unwrap_or("tools");
+    let top_k = data.get("top_k").and_then(Value::as_u64).unwrap_or(3);
+
+    let url = "http://127.0.0.1:17860";
+
+    // Try HTTP request first (server may already be running).
+    let request_body = serde_json::json!({
+        "method": "select",
+        "params": { "query": query, "library": library, "top_k": top_k }
+    });
+    let body_str = serde_json::to_string(&request_body).unwrap_or_default();
+
+    match http_request("POST", url, &[("Content-Type", "application/json")], &body_str) {
+        Ok(resp) => {
+            // Parse response: {"result": [...]}
+            if let Ok(parsed) = serde_json::from_str::<Value>(&resp) {
+                let result = parsed.get("result").cloned().unwrap_or(Value::Null);
+                return PackageResult::ok(serde_json::json!({"items": result}));
+            }
+            PackageResult::ok(serde_json::json!({"raw": resp}))
+        }
+        Err(e) => {
+            // Server not running — try to spawn it, then tell user to retry.
+            let package_dir = env_get("WEFT_PACKAGE_DIR").unwrap_or_else(|| ".".to_string());
+            let clean_dir = package_dir.replace(r"\\?\", "").replace('\\', "/");
+            let normalized = clean_dir.trim_end_matches('/');
+            let parts: Vec<&str> = normalized.rsplitn(4, '/').collect();
+            let root = parts.last().copied().unwrap_or(normalized);
+            let server_path = format!("{}/packages/installed/tool-selector/service/server.py", root);
+            let libraries_dir = format!("{}/packages/installed/tool-selector/service/libraries", root);
+
+            let spawn_args = serde_json::json!({
+                "name": "selector-http",
+                "command": "python",
+                "args": [&server_path, "--http", "--port", "17860", "--libraries-dir", &libraries_dir],
+                "env": {"PYTHONIOENCODING": "utf-8"},
+                "restart_on_crash": true,
+            });
+            let _ = process_spawn(&spawn_args.to_string());
+
+            PackageResult::err(format!("selector server starting (retry in ~15s): {}", e))
+        }
+    }
+}
+
 fn dispatch(action: &str, data: Value) -> PackageResult {
     match action {
         "describe" => do_describe(),
@@ -459,8 +567,10 @@ fn dispatch(action: &str, data: Value) -> PackageResult {
             do_delete_session_events(serde_json::from_value(data).unwrap_or_default())
         }
         "reset_session" | "delete_session" => do_reset_session(serde_json::from_value(data).unwrap_or_default()),
+        "delete_sessions" | "clear_sessions" => do_delete_sessions(data),
         "cancel_turn" => do_cancel_turn(data),
         "submit_user_input" => do_submit_user_input(data),
+        "select_tools" => do_select_tools(data),
         other => PackageResult::err(format!("unknown action: {other}")),
     }
 }

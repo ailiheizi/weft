@@ -366,7 +366,9 @@ class _AiDirectorWorkbenchScreenState
                   height: _headerHeight,
                 ),
                 Expanded(
-                  child: Padding(
+                  child: _hubView
+                      ? const HubCanvasView()
+                      : Padding(
                     padding: const EdgeInsets.fromLTRB(
                       Spacing.md,
                       Spacing.sm,

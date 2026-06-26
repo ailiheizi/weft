@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$ProviderConfig {
 
- String get name;@JsonKey(name: 'base_url') String get baseUrl; String get format; List<String> get models; List<ApiKeyConfig> get keys;
+ String get name;@JsonKey(name: 'base_url') String get baseUrl; String get format; List<String> get models; List<ApiKeyConfig> get keys;@JsonKey(name: 'key_count') int get keyCount;
 /// Create a copy of ProviderConfig
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $ProviderConfigCopyWith<ProviderConfig> get copyWith => _$ProviderConfigCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ProviderConfig&&(identical(other.name, name) || other.name == name)&&(identical(other.baseUrl, baseUrl) || other.baseUrl == baseUrl)&&(identical(other.format, format) || other.format == format)&&const DeepCollectionEquality().equals(other.models, models)&&const DeepCollectionEquality().equals(other.keys, keys));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ProviderConfig&&(identical(other.name, name) || other.name == name)&&(identical(other.baseUrl, baseUrl) || other.baseUrl == baseUrl)&&(identical(other.format, format) || other.format == format)&&const DeepCollectionEquality().equals(other.models, models)&&const DeepCollectionEquality().equals(other.keys, keys)&&(identical(other.keyCount, keyCount) || other.keyCount == keyCount));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,name,baseUrl,format,const DeepCollectionEquality().hash(models),const DeepCollectionEquality().hash(keys));
+int get hashCode => Object.hash(runtimeType,name,baseUrl,format,const DeepCollectionEquality().hash(models),const DeepCollectionEquality().hash(keys),keyCount);
 
 @override
 String toString() {
-  return 'ProviderConfig(name: $name, baseUrl: $baseUrl, format: $format, models: $models, keys: $keys)';
+  return 'ProviderConfig(name: $name, baseUrl: $baseUrl, format: $format, models: $models, keys: $keys, keyCount: $keyCount)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $ProviderConfigCopyWith<$Res>  {
   factory $ProviderConfigCopyWith(ProviderConfig value, $Res Function(ProviderConfig) _then) = _$ProviderConfigCopyWithImpl;
 @useResult
 $Res call({
- String name,@JsonKey(name: 'base_url') String baseUrl, String format, List<String> models, List<ApiKeyConfig> keys
+ String name,@JsonKey(name: 'base_url') String baseUrl, String format, List<String> models, List<ApiKeyConfig> keys,@JsonKey(name: 'key_count') int keyCount
 });
 
 
@@ -65,14 +65,15 @@ class _$ProviderConfigCopyWithImpl<$Res>
 
 /// Create a copy of ProviderConfig
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? baseUrl = null,Object? format = null,Object? models = null,Object? keys = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? baseUrl = null,Object? format = null,Object? models = null,Object? keys = null,Object? keyCount = null,}) {
   return _then(_self.copyWith(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,baseUrl: null == baseUrl ? _self.baseUrl : baseUrl // ignore: cast_nullable_to_non_nullable
 as String,format: null == format ? _self.format : format // ignore: cast_nullable_to_non_nullable
 as String,models: null == models ? _self.models : models // ignore: cast_nullable_to_non_nullable
 as List<String>,keys: null == keys ? _self.keys : keys // ignore: cast_nullable_to_non_nullable
-as List<ApiKeyConfig>,
+as List<ApiKeyConfig>,keyCount: null == keyCount ? _self.keyCount : keyCount // ignore: cast_nullable_to_non_nullable
+as int,
   ));
 }
 
@@ -157,10 +158,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String name, @JsonKey(name: 'base_url')  String baseUrl,  String format,  List<String> models,  List<ApiKeyConfig> keys)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String name, @JsonKey(name: 'base_url')  String baseUrl,  String format,  List<String> models,  List<ApiKeyConfig> keys, @JsonKey(name: 'key_count')  int keyCount)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ProviderConfig() when $default != null:
-return $default(_that.name,_that.baseUrl,_that.format,_that.models,_that.keys);case _:
+return $default(_that.name,_that.baseUrl,_that.format,_that.models,_that.keys,_that.keyCount);case _:
   return orElse();
 
 }
@@ -178,10 +179,10 @@ return $default(_that.name,_that.baseUrl,_that.format,_that.models,_that.keys);c
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String name, @JsonKey(name: 'base_url')  String baseUrl,  String format,  List<String> models,  List<ApiKeyConfig> keys)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String name, @JsonKey(name: 'base_url')  String baseUrl,  String format,  List<String> models,  List<ApiKeyConfig> keys, @JsonKey(name: 'key_count')  int keyCount)  $default,) {final _that = this;
 switch (_that) {
 case _ProviderConfig():
-return $default(_that.name,_that.baseUrl,_that.format,_that.models,_that.keys);case _:
+return $default(_that.name,_that.baseUrl,_that.format,_that.models,_that.keys,_that.keyCount);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -198,10 +199,10 @@ return $default(_that.name,_that.baseUrl,_that.format,_that.models,_that.keys);c
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String name, @JsonKey(name: 'base_url')  String baseUrl,  String format,  List<String> models,  List<ApiKeyConfig> keys)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String name, @JsonKey(name: 'base_url')  String baseUrl,  String format,  List<String> models,  List<ApiKeyConfig> keys, @JsonKey(name: 'key_count')  int keyCount)?  $default,) {final _that = this;
 switch (_that) {
 case _ProviderConfig() when $default != null:
-return $default(_that.name,_that.baseUrl,_that.format,_that.models,_that.keys);case _:
+return $default(_that.name,_that.baseUrl,_that.format,_that.models,_that.keys,_that.keyCount);case _:
   return null;
 
 }
@@ -213,7 +214,7 @@ return $default(_that.name,_that.baseUrl,_that.format,_that.models,_that.keys);c
 @JsonSerializable()
 
 class _ProviderConfig implements ProviderConfig {
-  const _ProviderConfig({required this.name, @JsonKey(name: 'base_url') required this.baseUrl, this.format = 'openai', final  List<String> models = const [], final  List<ApiKeyConfig> keys = const []}): _models = models,_keys = keys;
+  const _ProviderConfig({required this.name, @JsonKey(name: 'base_url') required this.baseUrl, this.format = 'openai', final  List<String> models = const [], final  List<ApiKeyConfig> keys = const [], @JsonKey(name: 'key_count') this.keyCount = 0}): _models = models,_keys = keys;
   factory _ProviderConfig.fromJson(Map<String, dynamic> json) => _$ProviderConfigFromJson(json);
 
 @override final  String name;
@@ -233,6 +234,7 @@ class _ProviderConfig implements ProviderConfig {
   return EqualUnmodifiableListView(_keys);
 }
 
+@override@JsonKey(name: 'key_count') final  int keyCount;
 
 /// Create a copy of ProviderConfig
 /// with the given fields replaced by the non-null parameter values.
@@ -247,16 +249,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ProviderConfig&&(identical(other.name, name) || other.name == name)&&(identical(other.baseUrl, baseUrl) || other.baseUrl == baseUrl)&&(identical(other.format, format) || other.format == format)&&const DeepCollectionEquality().equals(other._models, _models)&&const DeepCollectionEquality().equals(other._keys, _keys));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ProviderConfig&&(identical(other.name, name) || other.name == name)&&(identical(other.baseUrl, baseUrl) || other.baseUrl == baseUrl)&&(identical(other.format, format) || other.format == format)&&const DeepCollectionEquality().equals(other._models, _models)&&const DeepCollectionEquality().equals(other._keys, _keys)&&(identical(other.keyCount, keyCount) || other.keyCount == keyCount));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,name,baseUrl,format,const DeepCollectionEquality().hash(_models),const DeepCollectionEquality().hash(_keys));
+int get hashCode => Object.hash(runtimeType,name,baseUrl,format,const DeepCollectionEquality().hash(_models),const DeepCollectionEquality().hash(_keys),keyCount);
 
 @override
 String toString() {
-  return 'ProviderConfig(name: $name, baseUrl: $baseUrl, format: $format, models: $models, keys: $keys)';
+  return 'ProviderConfig(name: $name, baseUrl: $baseUrl, format: $format, models: $models, keys: $keys, keyCount: $keyCount)';
 }
 
 
@@ -267,7 +269,7 @@ abstract mixin class _$ProviderConfigCopyWith<$Res> implements $ProviderConfigCo
   factory _$ProviderConfigCopyWith(_ProviderConfig value, $Res Function(_ProviderConfig) _then) = __$ProviderConfigCopyWithImpl;
 @override @useResult
 $Res call({
- String name,@JsonKey(name: 'base_url') String baseUrl, String format, List<String> models, List<ApiKeyConfig> keys
+ String name,@JsonKey(name: 'base_url') String baseUrl, String format, List<String> models, List<ApiKeyConfig> keys,@JsonKey(name: 'key_count') int keyCount
 });
 
 
@@ -284,14 +286,15 @@ class __$ProviderConfigCopyWithImpl<$Res>
 
 /// Create a copy of ProviderConfig
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? baseUrl = null,Object? format = null,Object? models = null,Object? keys = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? baseUrl = null,Object? format = null,Object? models = null,Object? keys = null,Object? keyCount = null,}) {
   return _then(_ProviderConfig(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,baseUrl: null == baseUrl ? _self.baseUrl : baseUrl // ignore: cast_nullable_to_non_nullable
 as String,format: null == format ? _self.format : format // ignore: cast_nullable_to_non_nullable
 as String,models: null == models ? _self._models : models // ignore: cast_nullable_to_non_nullable
 as List<String>,keys: null == keys ? _self._keys : keys // ignore: cast_nullable_to_non_nullable
-as List<ApiKeyConfig>,
+as List<ApiKeyConfig>,keyCount: null == keyCount ? _self.keyCount : keyCount // ignore: cast_nullable_to_non_nullable
+as int,
   ));
 }
 

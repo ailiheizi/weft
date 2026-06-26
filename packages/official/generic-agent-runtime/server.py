@@ -20,7 +20,7 @@ logging.basicConfig(
 
 PORT = int(os.environ.get("WEFT_GENERIC_AGENT_RUNTIME_PORT", "43133"))
 HTTPD: ThreadingHTTPServer | None = None
-WEFT_CORE_BASE_URL = os.environ.get("WEFT_CORE_BASE_URL", "http://127.0.0.1:3004").rstrip("/")
+WEFT_CORE_BASE_URL = os.environ.get("WEFT_CORE_BASE_URL", "http://127.0.0.1:17830").rstrip("/")
 
 
 def plugin_dir() -> Path:

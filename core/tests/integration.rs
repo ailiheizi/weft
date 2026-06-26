@@ -70,12 +70,14 @@ fn test_state() -> AppState {
             keys: vec![ApiKeyConfig {
                 value: "sk-mock".into(),
                 label: None,
+                enabled: true,
             }],
             models: vec!["test-model".into()],
         }],
         routing: RoutingConfig {
             default_provider: Some("mock".into()),
             default_model: Some("test-model".into()),
+            ..Default::default()
         },
         key_strategy: KeyStrategyConfig::default(),
         fallback: FallbackConfig {

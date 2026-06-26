@@ -29,23 +29,19 @@ class WorkspacePanel extends ConsumerWidget {
     final artifacts = artifactsFromMessages(session.messages);
 
     // 选中优先用 workspace.selected；为空时回退到最新产物。
-    // （自动跟随 followLatest 由常驻的 ChatScreen 触发，不在此处，避免面板未展开时死锁。）
     final selected = workspace.selected ??
         (artifacts.isNotEmpty ? artifacts.last : null);
 
-    return DecoratedBox(
+    return Container(
+      margin: const EdgeInsets.fromLTRB(4, 8, 8, 8),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          left: BorderSide(
-            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-          ),
-        ),
+        color: theme.colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         children: [
           _WorkspaceHeader(sessionId: sessionId, selected: selected),
-          const Divider(height: 1),
           Expanded(
             child: artifacts.isEmpty
                 ? const EmptyState(
@@ -225,6 +221,8 @@ class _OrchestrationPreview extends ConsumerWidget {
             handoffs: state.handoffs,
             activity: state.activity,
             compact: true,
+            error: state.error,
+            running: state.running,
           ),
         ),
       ],

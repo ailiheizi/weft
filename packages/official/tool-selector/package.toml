@@ -1,0 +1,29 @@
+[identity]
+name = "tool-selector"
+version = "0.1.0"
+description = "Semantic selector engine — cosine-similarity matching from candidate libraries using ONNX INT8 inference. 5-50ms per query, no GPU required. Use for tool routing, asset selection, model routing."
+
+[package]
+entry = "start.py"
+runtime = "service"
+api_version = "weft.package.manifest/v1"
+assets = ["service"]
+
+[runtime_contract]
+startup_mode = "persistent"
+communication = ["http"]
+config_delivery = ["env"]
+readiness_probe = "http://127.0.0.1:17860"
+liveness_probe = "http://127.0.0.1:17860"
+stop_mode = "graceful"
+restart_policy = "host_managed"
+startup_command = "python"
+startup_args = ["service/server.py", "--http", "--port", "17860", "--libraries-dir", "service/libraries"]
+
+[capability]
+provides = ["tool.selector"]
+
+[permissions]
+process = true
+storage = true
+network = true

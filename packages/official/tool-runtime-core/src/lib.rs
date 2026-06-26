@@ -836,22 +836,36 @@ fn exec_value_text(value: &serde_json::Value, key: &str) -> String {
 }
 
 fn do_fs_list(args: &serde_json::Value) -> PackageResult {
-    let path = args
+    let raw = args
         .get("path")
         .and_then(|value| value.as_str())
         .unwrap_or(".");
-    match list_dir(path) {
+    let ws = workspace_root_of(args);
+    // 默认 "." → 工作区根(若已设),否则原样;具体路径走工作区解析。
+    let path = if raw.trim() == "." && !ws.is_empty() {
+        ws.trim_end_matches(['\\', '/']).to_string()
+    } else {
+        match resolve_in_workspace(raw, &ws) {
+            Ok(p) => p,
+            Err(e) => return PackageResult::err(e),
+        }
+    };
+    match list_dir(&path) {
         Ok(entries) => PackageResult::ok(serde_json::json!({"entries": entries})),
         Err(error) => PackageResult::err(error),
     }
 }
 
 fn do_fs_read(args: &serde_json::Value) -> PackageResult {
-    let path = normalize_user_path(
+    let path = match resolve_in_workspace(
         args.get("path")
             .and_then(|value| value.as_str())
             .unwrap_or(""),
-    );
+        &workspace_root_of(args),
+    ) {
+        Ok(p) => p,
+        Err(e) => return PackageResult::err(e),
+    };
     match read_file(&path) {
         Ok(content) => PackageResult::ok(serde_json::json!({"content": content})),
         Err(error) => PackageResult::err(error),
@@ -859,11 +873,14 @@ fn do_fs_read(args: &serde_json::Value) -> PackageResult {
 }
 
 fn do_fs_write(args: &serde_json::Value) -> PackageResult {
-    let path = normalize_user_path(
-        args.get("path")
-            .and_then(|value| value.as_str())
-            .unwrap_or(""),
-    );
+    let raw_path = args
+        .get("path")
+        .and_then(|value| value.as_str())
+        .unwrap_or("");
+    let path = match resolve_in_workspace(raw_path, &workspace_root_of(args)) {
+        Ok(p) => p,
+        Err(e) => return PackageResult::err(e),
+    };
     let content = args
         .get("content")
         .and_then(|value| value.as_str())
@@ -907,6 +924,171 @@ fn normalize_user_path(path: &str) -> String {
     trimmed.to_string()
 }
 
+/// 路径是否绝对(Windows 盘符 `X:\`/`X:/`、UNC `\\`、或 Unix `/` 开头)。
+fn is_absolute_path(path: &str) -> bool {
+    let p = path.trim();
+    if p.starts_with('/') || p.starts_with('\\') {
+        return true; // Unix 绝对 或 UNC/根
+    }
+    // Windows 盘符:形如 C:\ 或 C:/
+    let bytes = p.as_bytes();
+    bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && (bytes[2] == b'\\' || bytes[2] == b'/')
+}
+
+/// 拆分路径为(前缀, 段列表)。前缀指盘符根 `C:\`、UNC 根 `\\server\share` 或
+/// Unix 根 `/`;无绝对前缀时前缀为空(纯相对)。段不含分隔符,`.`/`..` 保留待折叠。
+fn split_path_prefix(path: &str) -> (String, Vec<String>) {
+    let norm = path.replace('/', "\\");
+    // UNC: \\server\share\...
+    if norm.starts_with("\\\\") {
+        let rest = &norm[2..];
+        let mut it = rest.splitn(3, '\\');
+        let server = it.next().unwrap_or("");
+        let share = it.next().unwrap_or("");
+        let tail = it.next().unwrap_or("");
+        let prefix = format!("\\\\{}\\{}", server, share);
+        let segs = tail
+            .split('\\')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect();
+        return (prefix, segs);
+    }
+    // Windows 盘符: C:\... 或 C:...
+    let bytes = norm.as_bytes();
+    if bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' {
+        let drive = format!("{}:\\", &norm[0..1]);
+        let rest = norm[2..].trim_start_matches('\\');
+        let segs = rest
+            .split('\\')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect();
+        return (drive, segs);
+    }
+    // Unix 绝对根
+    if norm.starts_with('\\') {
+        let rest = norm.trim_start_matches('\\');
+        let segs = rest
+            .split('\\')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect();
+        return ("\\".to_string(), segs);
+    }
+    // 纯相对
+    let segs = norm
+        .split('\\')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect();
+    (String::new(), segs)
+}
+
+/// 纯词法归一化(不触碰文件系统,适配 WASM 沙箱+文件可能尚不存在)。
+/// 折叠 `.`/`..` 段。`..` 越过前缀根时被丢弃(钳到根),不抛出。
+/// 返回归一化后的路径段列表(不含前缀)。
+fn lexical_normalize_segs(segs: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for seg in segs {
+        match seg.as_str() {
+            "." | "" => {}
+            ".." => {
+                out.pop();
+            }
+            other => out.push(other.to_string()),
+        }
+    }
+    out
+}
+
+/// 判断 candidate 是否被钳制在 workspace 内(含 workspace 根自身)。
+/// 纯词法 + Windows 大小写不敏感 + 段边界比较(避免 `C:\ws` 误配 `C:\ws2`)。
+/// 在界内返回 Ok(归一化绝对路径),越界返回 Err。
+fn contain_in_workspace(candidate_abs: &str, workspace_abs: &str) -> Result<String, String> {
+    let (cand_prefix, cand_segs_raw) = split_path_prefix(candidate_abs);
+    let (ws_prefix, ws_segs_raw) = split_path_prefix(workspace_abs);
+    let cand_segs = lexical_normalize_segs(&cand_segs_raw);
+    let ws_segs = lexical_normalize_segs(&ws_segs_raw);
+
+    // 前缀(盘符/UNC根)必须一致(大小写不敏感)。
+    if cand_prefix.to_lowercase() != ws_prefix.to_lowercase() {
+        return Err(format!(
+            "path '{}' escapes workspace '{}' (different root)",
+            candidate_abs, workspace_abs
+        ));
+    }
+    // candidate 段数必须 >= workspace 段数,且前 N 段逐一匹配(大小写不敏感)。
+    if cand_segs.len() < ws_segs.len() {
+        return Err(format!(
+            "path '{}' escapes workspace '{}'",
+            candidate_abs, workspace_abs
+        ));
+    }
+    for (c, w) in cand_segs.iter().zip(ws_segs.iter()) {
+        if c.to_lowercase() != w.to_lowercase() {
+            return Err(format!(
+                "path '{}' escapes workspace '{}'",
+                candidate_abs, workspace_abs
+            ));
+        }
+    }
+    // 重建归一化绝对路径。
+    let base = cand_prefix.trim_end_matches('\\');
+    if cand_segs.is_empty() {
+        Ok(format!("{}\\", base))
+    } else {
+        Ok(format!("{}\\{}", base, cand_segs.join("\\")))
+    }
+}
+
+/// 在会话工作区内解析用户路径并强制沙箱钳制。
+/// workspace_root 为空时退回旧行为(相对进程 cwd,不钳制),保证不破坏未设工作区的场景。
+/// workspace_root 非空时:相对路径 join 工作区;绝对/`~`/`..` 展开后必须落在工作区内,
+/// 越界返回 Err(严格沙箱,拒绝越界写入)。
+fn resolve_in_workspace(raw_path: &str, workspace_root: &str) -> Result<String, String> {
+    let trimmed = raw_path.trim();
+    let ws = workspace_root.trim();
+
+    // 未设工作区:维持旧行为(展开 ~/绝对路径,相对路径原样)。
+    if ws.is_empty() {
+        if trimmed.starts_with('~') || is_absolute_path(trimmed) {
+            return Ok(normalize_user_path(trimmed));
+        }
+        return Ok(normalize_user_path(trimmed));
+    }
+
+    let ws_base = ws.trim_end_matches(['\\', '/']);
+
+    // 计算 candidate 的绝对形式(尚未钳制)。
+    let candidate_abs = if trimmed.starts_with('~') {
+        // ~ 展开 home 后按绝对路径处理。
+        normalize_user_path(trimmed)
+    } else if is_absolute_path(trimmed) {
+        normalize_user_path(trimmed)
+    } else {
+        // 相对路径(含 ..) → join 到工作区根,交给词法归一化折叠 ..。
+        let rel = trimmed.replace('/', "\\");
+        let rel = rel.trim_start_matches('\\');
+        format!("{}\\{}", ws_base, rel)
+    };
+
+    // 强制钳制:candidate 归一化后必须落在工作区内。
+    contain_in_workspace(&candidate_abs, ws_base)
+}
+
+/// 从工具 args 取运行时注入的会话工作区根(agent-core 注入 `__workspace_root`)。
+fn workspace_root_of(args: &serde_json::Value) -> String {
+    args.get("__workspace_root")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string()
+}
+
 fn normalize_windows_user_desktop_path(path: &str) -> Option<String> {
     let normalized = path.replace('/', "\\");
     let parts = normalized.split('\\').collect::<Vec<_>>();
@@ -948,6 +1130,68 @@ fn home_dir_string() -> Option<String> {
     env_get("USERPROFILE").or_else(|| env_get("HOME"))
 }
 
+/// 尽力而为的 shell 命令越界防护(非硬边界)。
+/// 设了工作区时,扫描命令文本+argv,拦截"明显写到工作区外"的常见模式:
+///   - 重定向到 `..` 路径(`> ..\x`、`>> ../x`)
+///   - 重定向/写入到绝对路径(`> D:\x`、`> /etc/x`、`Out-File C:\x`)
+///   - `~` 家目录写入
+/// 这些是 AI 被 fs_write 拒绝后最常"自然"改用的逃逸方式。
+/// 无法覆盖 python -c/powershell .NET 等任意间接写入(已向用户说明为尽力而为)。
+fn shell_escape_guard(command: &str, argv: &[String], workspace_root: &str) -> Result<(), String> {
+    let ws = workspace_root.trim();
+    if ws.is_empty() {
+        return Ok(()); // 未设工作区:不限制。
+    }
+    // 合并命令与参数为统一扫描文本。
+    let mut hay = command.to_string();
+    for a in argv {
+        hay.push(' ');
+        hay.push_str(a);
+    }
+    let lower = hay.to_lowercase();
+
+    // 1) 绝对路径重定向/写入:盘符 `X:\`/`X:/`、Unix `/`、UNC `\\`。
+    //    只在出现写入动词/重定向符附近才拦(避免误伤纯读取的绝对路径)。
+    let has_write_redirect = hay.contains('>')
+        || lower.contains("out-file")
+        || lower.contains("set-content")
+        || lower.contains("add-content")
+        || lower.contains("tee ")
+        || lower.contains("tee-object");
+
+    // 2) `..` 路径穿越(在任意 token 中出现 `..\` 或 `../`)。
+    let has_dotdot = hay.contains("..\\") || hay.contains("../");
+
+    // 3) `~` 家目录引用。
+    let has_tilde = hay.contains("~/") || hay.contains("~\\") || hay.split_whitespace().any(|t| t == "~");
+
+    // 检测绝对路径 token(粗粒度)。
+    let has_abs = hay.split(|c: char| c == ' ' || c == '"' || c == '\'' || c == '>' || c == '|' || c == '\t')
+        .any(|tok| {
+            let t = tok.trim();
+            !t.is_empty() && is_absolute_path(t)
+        });
+
+    if has_dotdot {
+        return Err(format!(
+            "shell command rejected: contains '..' path traversal which may escape the workspace ('{}'). Use fs_write with a workspace-relative path instead.",
+            ws
+        ));
+    }
+    if has_tilde {
+        return Err(
+            "shell command rejected: references '~' home directory outside the workspace. Use fs_write with a workspace-relative path instead.".to_string()
+        );
+    }
+    if has_abs && has_write_redirect {
+        return Err(format!(
+            "shell command rejected: writes to an absolute path outside the workspace ('{}'). Use fs_write with a workspace-relative path instead.",
+            ws
+        ));
+    }
+    Ok(())
+}
+
 fn do_shell_exec(args: &serde_json::Value) -> PackageResult {
     let raw_command = args
         .get("command")
@@ -955,11 +1199,36 @@ fn do_shell_exec(args: &serde_json::Value) -> PackageResult {
         .unwrap_or("");
     let command = normalize_shell_command_text(raw_command);
     let argv = string_array_arg(args, "args");
-    let cwd = args
+    let ws = workspace_root_of(args);
+    // 尽力而为的命令越界防护(设了工作区时拦截明显的 ../绝对路径/~ 写入)。
+    if let Err(e) = shell_escape_guard(&command, &argv, &ws) {
+        return PackageResult::err(e);
+    }
+    // cwd 解析:已设工作区时,caller 指定的 cwd 必须落在工作区内(越界拒绝);
+    // 缺省时回退到工作区根,让脚本默认在工作区内运行(产物不散落项目根)。
+    let raw_cwd = args
         .get("cwd")
         .or_else(|| args.get("workdir"))
-        .and_then(|value| value.as_str())
-        .map(normalize_user_path);
+        .and_then(|value| value.as_str());
+    let cwd: Option<String> = match raw_cwd {
+        Some(c) if !c.trim().is_empty() => {
+            if ws.is_empty() {
+                Some(normalize_user_path(c))
+            } else {
+                match resolve_in_workspace(c, &ws) {
+                    Ok(p) => Some(p),
+                    Err(e) => return PackageResult::err(e),
+                }
+            }
+        }
+        _ => {
+            if ws.is_empty() {
+                None
+            } else {
+                Some(ws.trim_end_matches(['\\', '/']).to_string())
+            }
+        }
+    };
     let timeout_ms = args.get("timeout_ms").and_then(|value| value.as_u64());
     let shell = args
         .get("shell")

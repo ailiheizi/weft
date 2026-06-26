@@ -1,0 +1,5 @@
+# Service dependencies for tool-selector
+# Minimal: only what's needed for ONNX inference
+onnxruntime>=1.16
+transformers>=4.30
+numpy>=1.24

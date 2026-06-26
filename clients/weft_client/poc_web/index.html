@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>weft web-ui POC · React Flow 画布</title>
+  <!-- React Flow POC：验证 web UI 可 package 化 —— 在 webview 里用成熟画布库 React Flow，
+       直接 fetch weft-core HTTP API 出图，与 Flutter 壳几乎解耦。 -->
+  <script src="vendor/react.js"></script>
+  <script src="vendor/react-dom.js"></script>
+  <!-- reactflow UMD 依赖全局 jsxRuntime(react/jsx-runtime)，react UMD 不带，
+       这里用 React.createElement 手搓一个 shim，避免额外引 babel。 -->
+  <script>
+    (function () {
+      function build(type, props, key) {
+        props = props || {};
+        var children = props.children;
+        var rest = {};
+        for (var k in props) if (k !== 'children') rest[k] = props[k];
+        if (key !== undefined) rest.key = key;
+        if (children === undefined) return React.createElement(type, rest);
+        if (Array.isArray(children)) return React.createElement.apply(null, [type, rest].concat(children));
+        return React.createElement(type, rest, children);
+      }
+      window.jsxRuntime = { jsx: build, jsxs: build, Fragment: React.Fragment };
+    })();
+  </script>
+  <script src="vendor/reactflow.js"></script>
+  <link rel="stylesheet" href="vendor/reactflow.css" />
+  <style>
+    html, body, #root { margin: 0; height: 100%; background: #16161a; color: #e8e8ea;
+      font-family: system-ui, "Microsoft YaHei", sans-serif; }
+    .bar { position: absolute; z-index: 10; left: 50%; transform: translateX(-50%); bottom: 20px;
+      background: #1e1e22; border: 1px solid #333; border-radius: 14px; padding: 10px 12px;
+      display: flex; gap: 8px; align-items: center; box-shadow: 0 8px 28px #0008; }
+    .bar input { background: #2a2a30; border: none; color: #fff; border-radius: 8px; padding: 8px 10px; width: 320px; }
+    .bar button { background: #5b8cff; border: none; color: #fff; border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+    .bar button:disabled { opacity: .5; }
+    .status { position: absolute; z-index: 10; top: 10px; left: 10px; font-size: 12px; color: #8a8a92; }
+    .imgnode { width: 200px; background: #1e1e22; border: 2px solid #4CB782; border-radius: 12px; overflow: hidden; }
+    .imgnode .thumb { height: 130px; background: #2a2a30; display: flex; align-items: center; justify-content: center; color: #555; }
+    .imgnode .thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .imgnode .cap { padding: 6px 8px; font-size: 12px; color: #ccc; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <div class="status" id="status">core: 未连接</div>
+  <div class="bar">
+    <input id="prompt" placeholder="描述要生成的画面…" value="a neon-lit cyberpunk street at night" />
+    <button id="gen">生成</button>
+  </div>
+  <script>
+    const { useState, useCallback, createElement: h } = React;
+    const RF = window.ReactFlow;
+    // 从 URL query 取 core 地址 + token（Flutter 壳 launch 时拼入）。
+    const qs = new URLSearchParams(location.search);
+    const CORE = qs.get('core') || 'http://127.0.0.1:3004';
+    const TOKEN = qs.get('token') || '';
+
+    const statusEl = document.getElementById('status');
+    fetch(CORE + '/api/health').then(r => r.ok ? statusEl.textContent = 'core: 已连接 ✓' : null)
+      .catch(() => statusEl.textContent = 'core: 连接失败');
+
+    // 自定义图像节点：缩略图 + 标题（对标我们的卡片）。
+    function ImageNode({ data }) {
+      return h('div', { className: 'imgnode' }, [
+        h('div', { className: 'thumb', key: 't' },
+          data.img ? h('img', { src: data.img }) : (data.busy ? '生成中…' : '未生成')),
+        h('div', { className: 'cap', key: 'c' }, data.label),
+        h(RF.Handle, { type: 'source', position: 'right', key: 's' }),
+        h(RF.Handle, { type: 'target', position: 'left', key: 'g' }),
+      ]);
+    }
+    const nodeTypes = { image: ImageNode };
+
+    function App() {
+      const [nodes, setNodes] = useState([
+        { id: '1', type: 'image', position: { x: 80, y: 80 }, data: { label: '分镜1' } },
+        { id: '2', type: 'image', position: { x: 80, y: 300 }, data: { label: '分镜2' } },
+      ]);
+      const [edges, setEdges] = useState([]);
+      const onNodesChange = useCallback((c) => setNodes((n) => RF.applyNodeChanges(c, n)), []);
+      const onEdgesChange = useCallback((c) => setEdges((e) => RF.applyEdgeChanges(c, e)), []);
+      const onConnect = useCallback((p) => setEdges((e) => RF.addEdge(p, e)), []);
+
+      window.__gen = async (prompt) => {
+        setNodes((ns) => ns.map((n) => ({ ...n, data: { ...n.data, busy: true } })));
+        try {
+          const res = await fetch(CORE + '/api/capabilities/image.generate/call', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+            body: JSON.stringify({ action: 'generate', data: { prompt, size: '1024x1024' } }),
+          });
+          const j = await res.json();
+          const path = j?.response?.data?.output_path;
+          // output_path 是 core 工作目录的绝对路径，提取 workspace/ 之后的相对部分，
+          // 经 core 的 /media HTTP 端点加载(web 不能直接读 file://)。
+          let img = null;
+          if (path) {
+            const norm = path.replace(/\\/g, '/');
+            const idx = norm.indexOf('/workspace/');
+            const rel = idx >= 0 ? norm.slice(idx + '/workspace/'.length) : norm.split('/').slice(-2).join('/');
+            img = CORE + '/media/' + rel;
+          }
+          setNodes((ns) => ns.map((n) => ({ ...n, data: { ...n.data, busy: false, img } })));
+        } catch (e) {
+          statusEl.textContent = 'core: 出图失败 ' + e;
+          setNodes((ns) => ns.map((n) => ({ ...n, data: { ...n.data, busy: false } })));
+        }
+      };
+
+      return h('div', { style: { width: '100%', height: '100%' } },
+        h(RF.ReactFlow, {
+          nodes, edges, onNodesChange, onEdgesChange, onConnect, nodeTypes, fitView: true,
+          colorMode: 'dark',
+        }, [
+          h(RF.Background, { key: 'bg', gap: 24 }),
+          h(RF.Controls, { key: 'ct' }),
+          h(RF.MiniMap, { key: 'mm' }),
+        ]));
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+
+    document.getElementById('gen').onclick = () => {
+      const btn = document.getElementById('gen');
+      btn.disabled = true;
+      Promise.resolve(window.__gen(document.getElementById('prompt').value)).finally(() => btn.disabled = false);
+    };
+  </script>
+</body>
+</html>

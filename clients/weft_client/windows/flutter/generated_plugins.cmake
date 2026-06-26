@@ -8,6 +8,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   media_kit_video
   screen_retriever_windows
   url_launcher_windows
+  webview_all_windows
   webview_windows
   window_manager
 )

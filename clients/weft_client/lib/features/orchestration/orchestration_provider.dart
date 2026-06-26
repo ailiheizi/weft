@@ -102,7 +102,7 @@ class OrchestrationNotifier extends StateNotifier<OrchestrationState> {
       _startPolling();
       await refresh();
     } catch (e) {
-      state = state.copyWith(running: false, error: e.toString());
+      state = state.copyWith(running: false, error: _sanitizeError(e));
     }
   }
 
@@ -129,9 +129,26 @@ class OrchestrationNotifier extends StateNotifier<OrchestrationState> {
         activity: activity,
         clearError: true,
       );
+      // 全部任务到达终态(done)→ 停止轮询,避免无限 2s 轮询空耗。
+      if (tasks.isNotEmpty && tasks.every((t) => t.phase == 'done')) {
+        stop();
+      }
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(error: _sanitizeError(e));
     }
+  }
+
+  /// 把异常转成简短可读文案,不向用户暴露 DioException 的完整请求/堆栈细节。
+  static String _sanitizeError(Object e) {
+    final s = e.toString();
+    if (s.contains('SocketException') || s.contains('Connection')) {
+      return '无法连接到本地服务(core 未启动?)';
+    }
+    if (s.contains('timeout') || s.contains('Timeout')) {
+      return '编排接口响应超时,正在重试…';
+    }
+    // 兜底:截断,避免长堆栈灌进 UI。
+    return s.length > 120 ? '${s.substring(0, 120)}…' : s;
   }
 
   /// 附着到一个已存在的 board(AI 从聊天创建的),只轮询不新建。
@@ -145,7 +162,17 @@ class OrchestrationNotifier extends StateNotifier<OrchestrationState> {
 
   void _startPolling() {
     _poll?.cancel();
-    _poll = Timer.periodic(const Duration(seconds: 2), (_) => refresh());
+    final startedAt = DateTime.now();
+    _poll = Timer.periodic(const Duration(seconds: 2), (_) {
+      // 兜底:board 永不完成(子 agent 卡死)时,15 分钟后停止轮询,
+      // 避免无限后台请求;此时保留最后状态 + 提示。
+      if (DateTime.now().difference(startedAt) > const Duration(minutes: 15)) {
+        stop();
+        state = state.copyWith(error: '编排超过 15 分钟未完成,已停止自动刷新');
+        return;
+      }
+      refresh();
+    });
   }
 
   /// 停止轮询（任务都完成或用户离开）。

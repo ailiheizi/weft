@@ -2,7 +2,7 @@
 
 [core]
 # host = "127.0.0.1"
-# port = 3004
+# port = 17830
 # log_level = "info"
 # data_dir = "./data"
 

@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -8,6 +7,12 @@ import '../models/chat_session_meta.dart';
 
 const _uuid = Uuid();
 
+/// 会话列表加载状态(供侧栏区分 加载中 / core 未启动 / 真空)。
+enum SessionsLoadStatus { loading, ready, failed }
+
+final sessionsLoadStatusProvider =
+    StateProvider<SessionsLoadStatus>((ref) => SessionsLoadStatus.loading);
+
 // Provider for WeftClawApi
 final weftClawApiProvider = Provider<WeftClawApi>((ref) {
   final dio = ref.watch(apiClientProvider);
@@ -15,11 +20,12 @@ final weftClawApiProvider = Provider<WeftClawApi>((ref) {
 });
 
 class SessionsNotifier extends StateNotifier<List<ChatSessionMeta>> {
-  SessionsNotifier(this._api) : super([]) {
+  SessionsNotifier(this._api, this._ref) : super([]) {
     _load();
   }
 
   final WeftClawApi _api;
+  final Ref _ref;
 
   Future<void> _load() async {
     try {
@@ -37,8 +43,12 @@ class SessionsNotifier extends StateNotifier<List<ChatSessionMeta>> {
       // 按 updatedAt 倒序
       metas.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       state = metas;
+      _ref.read(sessionsLoadStatusProvider.notifier).state =
+          SessionsLoadStatus.ready;
     } catch (_) {
-      // weft-core 未启动时静默失败，保持空列表
+      // weft-core 未启动时:标记失败,供 UI 区分"未连接"与"真空"。
+      _ref.read(sessionsLoadStatusProvider.notifier).state =
+          SessionsLoadStatus.failed;
     }
   }
 
@@ -67,6 +77,25 @@ class SessionsNotifier extends StateNotifier<List<ChatSessionMeta>> {
     state = state.where((m) => m.id != id).toList();
     try {
       await _api.deleteSession(id);
+    } catch (_) {}
+  }
+
+  /// 批量删除指定会话(乐观更新 + 调批量端点)。
+  Future<void> deleteSessions(List<String> ids) async {
+    if (ids.isEmpty) return;
+    final idSet = ids.toSet();
+    state = state.where((m) => !idSet.contains(m.id)).toList();
+    try {
+      await _api.deleteSessions(ids);
+    } catch (_) {}
+  }
+
+  /// 清空全部会话。
+  Future<void> clearAllSessions() async {
+    final ids = state.map((m) => m.id).toList();
+    state = [];
+    try {
+      await _api.deleteSessions(ids, all: true);
     } catch (_) {}
   }
 
@@ -109,6 +138,6 @@ final sessionsProvider =
     StateNotifierProvider<SessionsNotifier, List<ChatSessionMeta>>(
   (ref) {
     final api = ref.watch(weftClawApiProvider);
-    return SessionsNotifier(api);
+    return SessionsNotifier(api, ref);
   },
 );

@@ -303,8 +303,8 @@ mod tests {
     #[test]
     fn service_package_mapping_keeps_memory_runtime_on_webhook_passthrough() {
         assert_eq!(
-            service_plugin_request_url("memory-runtime", "http://127.0.0.1:3004"),
-            "http://127.0.0.1:3004/webhook"
+            service_plugin_request_url("memory-runtime", "http://127.0.0.1:17830"),
+            "http://127.0.0.1:17830/webhook"
         );
 
         let payload = serde_json::json!({
@@ -326,8 +326,8 @@ mod tests {
         let payload = serde_json::json!({"hello": "world"});
 
         assert_eq!(
-            service_plugin_request_url("companion-core", "http://127.0.0.1:3004"),
-            "http://127.0.0.1:3004/webhook"
+            service_plugin_request_url("companion-core", "http://127.0.0.1:17830"),
+            "http://127.0.0.1:17830/webhook"
         );
         assert_eq!(
             service_plugin_request_body("companion-core", &payload),

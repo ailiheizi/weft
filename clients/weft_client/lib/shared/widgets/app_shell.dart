@@ -7,8 +7,12 @@ import '../../core/models/app.dart';
 import '../../core/providers/connection_provider.dart';
 import '../../core/providers/data_providers.dart';
 import '../../core/providers/pinned_apps_provider.dart';
+import '../../core/providers/sessions_provider.dart';
+import '../../core/providers/chat_provider.dart' show activeSessionIdProvider;
+import '../../features/chat/session_sidebar.dart';
 import '../theme/app_theme.dart';
 import 'command_palette.dart';
+import 'resizable_handle.dart';
 
 class _OpenPaletteIntent extends Intent {
   const _OpenPaletteIntent();
@@ -22,9 +26,8 @@ class AppShell extends ConsumerWidget {
   static const _fixed = [
     (path: '/dashboard', icon: Icons.dashboard_outlined, label: 'Dashboard'),
     (path: '/chat', icon: Icons.chat_outlined, label: 'Chat'),
-    (path: '/packages', icon: Icons.extension_outlined, label: 'Packages'),
+    (path: '/packages', icon: Icons.extension_outlined, label: '扩展'),
     (path: '/providers', icon: Icons.bolt_outlined, label: 'Providers'),
-    (path: '/services', icon: Icons.dns_outlined, label: 'Services'),
     (path: '/settings', icon: Icons.settings_outlined, label: 'Settings'),
   ];
 
@@ -86,14 +89,13 @@ class AppShell extends ConsumerWidget {
             },
           ),
         },
-        child: _GotoKeyHandler(
-          child: Scaffold(
+        child: Scaffold(
             body: Column(
               children: [
                 Expanded(
                   child: Row(
                     children: [
-                      // 不透明侧栏 chrome：比画布略深的冷色实色。
+                      // 窄图标导航条:跨区切换(仪表盘/插件/Providers/Services/设置)。
                       ColoredBox(
                         color: const Color(0xFF0B0C10),
                         child: NavigationRail(
@@ -101,6 +103,8 @@ class AppShell extends ConsumerWidget {
                           selectedIndex: selected,
                           onDestinationSelected: (i) =>
                               context.go(allPaths[i]),
+                          minWidth: 56,
+                          labelType: NavigationRailLabelType.none,
                           leading: Padding(
                             padding:
                                 const EdgeInsets.symmetric(vertical: 16),
@@ -111,7 +115,17 @@ class AppShell extends ConsumerWidget {
                         ),
                       ),
                       const VerticalDivider(
-                          width: 1, color: Color(0x0FFFFFFF)),
+                          width: 1, color: Color(0x14FFFFFF)),
+                      // 会话侧栏只在聊天页显示(会话是聊天专属,Dashboard/Packages
+                      // 等页面不挂会话列表)。
+                      // 会话侧栏在聊天页 + 场景/技能/MCP 管理页显示(这些都从
+                      // 会话栏顶部入口进入,需保留侧栏以便返回/切换)。
+                      if (location.startsWith('/chat') ||
+                          location.startsWith('/scenes') ||
+                          location.startsWith('/skills') ||
+                          location.startsWith('/mcp')) ...[
+                        _AggregateSessionPanel(),
+                      ],
                       Expanded(child: child),
                     ],
                   ),
@@ -121,7 +135,6 @@ class AppShell extends ConsumerWidget {
             ),
           ),
         ),
-      ),
     );
   }
 
@@ -143,66 +156,49 @@ class AppShell extends ConsumerWidget {
   }
 }
 
-/// Linear 式连续键导航：按 `g` 后 1.2s 内再按目标键跳转。
-/// g d=dashboard / c=chat / p=packages / s=store /
-/// r=providers / v=services / , =settings。输入框聚焦时不拦截。
-class _GotoKeyHandler extends StatefulWidget {
-  const _GotoKeyHandler({required this.child});
-  final Widget child;
-
+/// 聚合会话侧栏:包装 SessionSidebar,接全局 activeSessionIdProvider。
+/// 选会话/新建会话时,若当前不在 /chat 自动跳转过去。可拖拽调宽。
+class _AggregateSessionPanel extends ConsumerStatefulWidget {
   @override
-  State<_GotoKeyHandler> createState() => _GotoKeyHandlerState();
+  ConsumerState<_AggregateSessionPanel> createState() =>
+      _AggregateSessionPanelState();
 }
 
-class _GotoKeyHandlerState extends State<_GotoKeyHandler> {
-  bool _armed = false;
-  DateTime? _armedAt;
-
-  static final _map = {
-    LogicalKeyboardKey.keyD: '/dashboard',
-    LogicalKeyboardKey.keyC: '/chat',
-    LogicalKeyboardKey.keyP: '/packages',
-    LogicalKeyboardKey.keyS: '/settings',
-    LogicalKeyboardKey.keyR: '/providers',
-    LogicalKeyboardKey.keyV: '/services',
-  };
-
-  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
-
-    // 文本输入聚焦时不拦截（让用户能正常打字）。
-    final primary = FocusManager.instance.primaryFocus;
-    if (primary?.context?.widget is EditableText) {
-      return KeyEventResult.ignored;
-    }
-
-    final now = DateTime.now();
-    if (_armed && _armedAt != null &&
-        now.difference(_armedAt!) < const Duration(milliseconds: 1200)) {
-      final dest = _map[event.logicalKey];
-      _armed = false;
-      _armedAt = null;
-      if (dest != null) {
-        context.go(dest);
-        return KeyEventResult.handled;
-      }
-      return KeyEventResult.ignored;
-    }
-
-    if (event.logicalKey == LogicalKeyboardKey.keyG) {
-      _armed = true;
-      _armedAt = now;
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
+class _AggregateSessionPanelState
+    extends ConsumerState<_AggregateSessionPanel> {
+  double _width = 248;
 
   @override
   Widget build(BuildContext context) {
-    return Focus(
-      autofocus: true,
-      onKeyEvent: _onKey,
-      child: widget.child,
+    final activeSessionId = ref.watch(activeSessionIdProvider);
+
+    void goChatIfNeeded() {
+      final loc = GoRouterState.of(context).uri.path;
+      if (!loc.startsWith('/chat')) context.go('/chat');
+    }
+
+    return Row(
+      children: [
+        SessionSidebar(
+          width: _width,
+          activeSessionId: activeSessionId,
+          onSelectSession: (id) {
+            ref.read(activeSessionIdProvider.notifier).state = id;
+            goChatIfNeeded();
+          },
+          onNewChat: () async {
+            final meta =
+                await ref.read(sessionsProvider.notifier).createSession();
+            ref.read(activeSessionIdProvider.notifier).state = meta.id;
+            if (context.mounted) goChatIfNeeded();
+          },
+        ),
+        ResizableHandle(
+          onDelta: (dx) => setState(() {
+            _width = (_width + dx).clamp(200.0, 420.0);
+          }),
+        ),
+      ],
     );
   }
 }

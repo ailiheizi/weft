@@ -6,8 +6,8 @@ author = "WEFT"
 keywords = ["memory", "runtime", "hermes"]
 
 [package]
-entry = "start-memory-runtime.ps1"
-runtime = "service"
+# entry disabled
+runtime = "none"
 api_version = "weft.package.manifest/v1"
 assets = ["server.py"]
 

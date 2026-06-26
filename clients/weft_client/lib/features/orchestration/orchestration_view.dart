@@ -12,6 +12,8 @@ class OrchestrationView extends StatefulWidget {
     required this.handoffs,
     required this.activity,
     this.compact = false,
+    this.error,
+    this.running = false,
   });
 
   final List<TeamTask> tasks;
@@ -20,6 +22,13 @@ class OrchestrationView extends StatefulWidget {
 
   /// compact=true 用于聊天工作区窄面板(竖向堆叠)。
   final bool compact;
+
+  /// 轮询/接口错误(脱敏后的简短文案)。非空时顶部显示红色横幅,
+  /// 避免编排出错时面板看起来"啥也没发生"。
+  final String? error;
+
+  /// 是否仍在轮询(board 已建、未完成)。用于区分"等待中"与"真空白"。
+  final bool running;
 
   @override
   State<OrchestrationView> createState() => _OrchestrationViewState();
@@ -30,9 +39,55 @@ class _OrchestrationViewState extends State<OrchestrationView> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isEmpty = widget.tasks.isEmpty && widget.activity.isEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // 错误横幅:编排出错时显式提示,而非空白让用户以为卡死。
+        if (widget.error != null && widget.error!.trim().isNotEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            color: theme.colorScheme.errorContainer,
+            child: Row(
+              children: [
+                Icon(Icons.error_outline,
+                    size: 16, color: theme.colorScheme.onErrorContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    widget.error!,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.onErrorContainer),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        // 空态:board 已建但还没任何任务/活动 → 显示"等待中"而非纯空白。
+        if (isEmpty && widget.error == null)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (widget.running) ...[
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Text(
+                  widget.running ? '团队正在启动,等待 planner 分解…' : '编排尚无进度',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
         // 视图切换:流水线 / DAG。
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),

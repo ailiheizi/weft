@@ -22,7 +22,15 @@ pub async fn list_providers(State(state): State<AppState>) -> Json<serde_json::V
             })
         })
         .collect();
-    Json(serde_json::json!({ "providers": providers }))
+    // 同时返回路由信息，让前端区分文本LLM(default_provider)与图像(image_provider)用途。
+    Json(serde_json::json!({
+        "providers": providers,
+        "routing": {
+            "default_provider": config.routing.default_provider,
+            "default_model": config.routing.default_model,
+            "image_provider": config.routing.image_provider,
+        }
+    }))
 }
 
 pub async fn get_provider(
@@ -32,12 +40,26 @@ pub async fn get_provider(
     let config = state.config.read().await;
     match config.providers.iter().find(|p| p.name == name) {
         Some(p) => {
+            // get_provider 用于编辑对话框,需返回完整 keys(本地单用户应用,
+            // key 归用户所有,通过 runtime-token 鉴权后可见)。列表接口仍只给 key_count。
+            let keys: Vec<serde_json::Value> = p
+                .keys
+                .iter()
+                .map(|k| {
+                    serde_json::json!({
+                        "value": k.value,
+                        "label": k.label,
+                        "enabled": k.enabled,
+                    })
+                })
+                .collect();
             let resp = serde_json::json!({
                 "name": p.name,
                 "base_url": p.base_url,
                 "format": p.format,
                 "models": p.models,
                 "key_count": p.keys.len(),
+                "keys": keys,
             });
             Json(resp).into_response()
         }
@@ -59,6 +81,72 @@ pub struct CreateProviderRequest {
 
 fn default_format() -> String {
     "openai".into()
+}
+
+/// 请求体:手动从 provider 拉取可用模型列表(配置对话框里的「获取模型」按钮)。
+#[derive(Debug, Deserialize)]
+pub struct FetchModelsRequest {
+    pub base_url: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default = "default_format")]
+    pub format: String,
+}
+
+/// 调用 provider 的 /models 接口拉取可用模型 id 列表。
+/// OpenAI 格式:GET {base_url}/models;Anthropic 没有标准 models 接口,返回提示。
+pub async fn fetch_models(
+    State(_state): State<AppState>,
+    Json(req): Json<FetchModelsRequest>,
+) -> impl IntoResponse {
+    let base = req.base_url.trim().trim_end_matches('/');
+    if base.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "base_url required" })),
+        )
+            .into_response();
+    }
+    // 两种常见布局:base 已含 /v1 → 直接 /models;否则补 /v1/models;都试。
+    let url = if base.ends_with("/v1") {
+        format!("{base}/models")
+    } else {
+        format!("{base}/v1/models")
+    };
+
+    let client = reqwest::Client::new();
+    let mut rb = client.get(&url);
+    if !req.api_key.trim().is_empty() {
+        rb = rb.bearer_auth(req.api_key.trim());
+    }
+    match rb.send().await {
+        Ok(resp) if resp.status().is_success() => {
+            let body: serde_json::Value = resp.json().await.unwrap_or_default();
+            // OpenAI: { "data": [ { "id": "..." }, ... ] }
+            let models: Vec<String> = body
+                .get("data")
+                .and_then(|d| d.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|m| m.get("id").and_then(|v| v.as_str()).map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            Json(serde_json::json!({ "models": models })).into_response()
+        }
+        Ok(resp) => (
+            StatusCode::BAD_GATEWAY,
+            Json(serde_json::json!({
+                "error": format!("provider returned {}", resp.status()),
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(serde_json::json!({ "error": format!("fetch failed: {e}") })),
+        )
+            .into_response(),
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -277,4 +365,43 @@ pub async fn delete_provider(
     }
 
     (StatusCode::OK, Json(response)).into_response()
+}
+
+/// 从上游 provider 的 /v1/models 端点拉取实际可用模型列表。
+/// 让 web 前端能展示上游中转站的全部模型，而不只是 config 手写的几个。
+pub async fn list_upstream_models(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    let config = state.config.read().await;
+    let Some(provider) = config.providers.iter().find(|p| p.name == name) else {
+        return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "provider not found"}))).into_response();
+    };
+    let api_key = provider.keys.iter().find(|k| k.enabled && !k.value.trim().is_empty()).map(|k| k.value.trim().to_string());
+    let base_url = provider.base_url.trim_end_matches('/').to_string();
+    drop(config); // 释放读锁
+
+    let url = format!("{base_url}/v1/models");
+    let client = reqwest::Client::new();
+    let mut req = client.get(&url);
+    if let Some(key) = &api_key {
+        req = req.header("Authorization", format!("Bearer {key}"));
+    }
+    match req.timeout(std::time::Duration::from_secs(15)).send().await {
+        Ok(resp) => {
+            if let Ok(body) = resp.json::<serde_json::Value>().await {
+                let models: Vec<String> = body
+                    .get("data")
+                    .and_then(|d| d.as_array())
+                    .map(|arr| arr.iter().filter_map(|m| m.get("id").and_then(|v| v.as_str()).map(|s| s.to_string())).collect())
+                    .unwrap_or_default();
+                Json(serde_json::json!({"models": models, "count": models.len()})).into_response()
+            } else {
+                (StatusCode::BAD_GATEWAY, Json(serde_json::json!({"error": "invalid upstream response"}))).into_response()
+            }
+        }
+        Err(e) => {
+            (StatusCode::BAD_GATEWAY, Json(serde_json::json!({"error": format!("upstream request failed: {e}")}))).into_response()
+        }
+    }
 }

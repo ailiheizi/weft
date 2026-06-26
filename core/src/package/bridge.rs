@@ -249,6 +249,13 @@ fn run_host_exec_command(parsed: HostExecInput) -> String {
     command.stdout(std::process::Stdio::piped());
     command.stderr(std::process::Stdio::piped());
 
+    // Windows: 隐藏 shell_exec 子进程的 console 窗口(FFI 嵌入模式下不弹黑框)。
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
     if parsed.stdin.is_some() || parsed.stdin_base64.is_some() {
         command.stdin(std::process::Stdio::piped());
     }
@@ -467,7 +474,18 @@ host_fn!(pub host_write_file_base64(user_data: WasmHostState; input: String) -> 
         let _ = std::fs::create_dir_all(parent);
     }
     match std::fs::write(&path, &bytes) {
-        Ok(()) => Ok(serde_json::json!({ "ok": true, "path": path, "bytes": bytes.len() }).to_string()),
+        Ok(()) => {
+            // 返回绝对路径：写入用的是相对 Core CWD 的路径，但前端(独立进程，
+            // CWD 不同)需要绝对路径才能用 File() 显示。canonicalize 失败则回退原值。
+            // Windows 上 canonicalize 会加 `\\?\` 扩展长度前缀，Flutter File() 不识别，需剥掉。
+            let abs = std::fs::canonicalize(&path)
+                .map(|p| {
+                    let s = p.to_string_lossy().to_string();
+                    s.strip_prefix(r"\\?\").map(|x| x.to_string()).unwrap_or(s)
+                })
+                .unwrap_or_else(|_| path.clone());
+            Ok(serde_json::json!({ "ok": true, "path": abs, "bytes": bytes.len() }).to_string())
+        }
         Err(e) => Ok(serde_json::json!({ "error": format!("write failed: {e}") }).to_string()),
     }
 });
@@ -1842,6 +1860,25 @@ impl WasmPackageHost {
         self.package_map.lock().unwrap().keys().cloned().collect()
     }
 
+    /// Write a value into the shared KV store (same store WASM packages read via
+    /// host_kv_get). Lets the API layer push runtime state (e.g. team:role_routing
+    /// on scene activation) without going through a WASM call.
+    pub fn kv_set(&self, key: &str, value: &str) {
+        if let Ok(mut store) = self.base_state.kv_store.lock() {
+            store.insert(key.to_string(), value.to_string());
+        }
+    }
+
+    /// Read a value from the shared KV store.
+    #[allow(dead_code)]
+    pub fn kv_get(&self, key: &str) -> Option<String> {
+        self.base_state
+            .kv_store
+            .lock()
+            .ok()
+            .and_then(|store| store.get(key).cloned())
+    }
+
     pub fn set_app_state(&mut self, app_state: crate::api::openai_compat::AppState) {
         if let Ok(mut state) = self.base_state.app_state.lock() {
             *state = Some(app_state);
@@ -1944,6 +1981,19 @@ impl WasmHandle {
             .lock()
             .map(|h| h.package_names())
             .unwrap_or_default()
+    }
+
+    /// Write a value into the shared KV store (see WasmPackageHost::kv_set).
+    pub fn kv_set(&self, key: &str, value: &str) {
+        if let Ok(h) = self.host.lock() {
+            h.kv_set(key, value);
+        }
+    }
+
+    /// Read a value from the shared KV store.
+    #[allow(dead_code)]
+    pub fn kv_get(&self, key: &str) -> Option<String> {
+        self.host.lock().ok().and_then(|h| h.kv_get(key))
     }
 
     pub fn set_app_state(&self, app_state: crate::api::openai_compat::AppState) -> Result<()> {

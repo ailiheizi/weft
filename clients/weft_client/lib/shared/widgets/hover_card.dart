@@ -32,12 +32,12 @@ class _HoverCardState extends State<HoverCard> {
   Widget build(BuildContext context) {
     final r = BorderRadius.circular(GlassTokens.radius);
     final borderColor =
-        _hovered ? GlassTokens.borderHover : GlassTokens.borderIdle;
+        _hovered ? GlassTokens.borderHoverOf(context) : GlassTokens.borderIdleOf(context);
 
     // idle: flat 用最低档，否则默认档；hover: 抬升档。
     final Color color = _hovered
-        ? GlassTokens.fillRaised
-        : (widget.flat ? GlassTokens.fillFlat : GlassTokens.fill);
+        ? GlassTokens.fillRaisedOf(context)
+        : (widget.flat ? GlassTokens.fillFlatOf(context) : GlassTokens.fillOf(context));
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),

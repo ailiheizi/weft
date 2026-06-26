@@ -668,18 +668,42 @@ pub fn discover_manifests(plugins_dir: &Path) -> Vec<PackageManifest> {
 }
 
 fn resolve_powershell_command() -> String {
-    if std::process::Command::new("pwsh")
-        .arg("-NoProfile")
-        .arg("-Command")
-        .arg("$PSVersionTable.PSVersion.ToString()")
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
+    // Windows: 优先找 pwsh.exe 真实路径(绕过 scoop .cmd shim,避免弹 cmd 窗口)。
+    #[cfg(windows)]
     {
-        "pwsh".into()
-    } else {
-        "powershell".into()
+        use std::os::windows::process::CommandExt;
+        // 常见 pwsh 真实路径
+        let candidates = [
+            r"C:\Program Files\PowerShell\7\pwsh.exe",
+            r"C:\Program Files (x86)\PowerShell\7\pwsh.exe",
+        ];
+        for candidate in &candidates {
+            if std::path::Path::new(candidate).exists() {
+                return candidate.to_string();
+            }
+        }
+        // 用 where.exe 找真实路径(不弹窗)
+        let mut cmd = std::process::Command::new("where.exe");
+        cmd.arg("pwsh.exe");
+        cmd.creation_flags(0x08000000);
+        if let Ok(output) = cmd.output() {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout);
+                if let Some(line) = path.lines().find(|l| l.ends_with(".exe")) {
+                    return line.trim().to_string();
+                }
+            }
+        }
     }
+    #[cfg(not(windows))]
+    {
+        let mut cmd = std::process::Command::new("pwsh");
+        cmd.arg("-NoProfile").arg("-Command").arg("echo ok");
+        if cmd.output().map(|o| o.status.success()).unwrap_or(false) {
+            return "pwsh".into();
+        }
+    }
+    "powershell".into()
 }
 
 fn resolve_service_command(entry_path: &Path) -> (String, Vec<String>) {

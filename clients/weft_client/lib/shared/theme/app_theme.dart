@@ -46,55 +46,124 @@ class AppSurfaces extends ThemeExtension<AppSurfaces> {
   }
 }
 
+/// 一套配色调色板(暗/亮各一份),喂给 _build 派生完整 ThemeData。
+@immutable
+class _Palette {
+  const _Palette({
+    required this.brightness,
+    required this.baseBg,
+    required this.surface,
+    required this.surfaceRaised,
+    required this.surfaceInset,
+    required this.textPrimary,
+    required this.textMuted,
+    required this.textTertiary,
+    required this.border,
+    required this.divider,
+    required this.accent,
+    required this.accentHover,
+    required this.onAccent,
+    required this.accentRowTint,
+    required this.statusOk,
+    required this.statusWarn,
+    required this.statusError,
+  });
+
+  final Brightness brightness;
+  final Color baseBg;
+  final Color surface;
+  final Color surfaceRaised;
+  final Color surfaceInset;
+  final Color textPrimary;
+  final Color textMuted;
+  final Color textTertiary;
+  final Color border;
+  final Color divider;
+  final Color accent;
+  final Color accentHover;
+  final Color onAccent;
+  final Color accentRowTint;
+  final Color statusOk;
+  final Color statusWarn;
+  final Color statusError;
+}
+
 class AppTheme {
   AppTheme._();
 
-  // ── Linear 冷调深蓝黑调色板 ────────────────────────────────────────────
-  static const _baseBg = Color(0xFF0E0F13); // 冷近黑画布
-  static const _surface = Color(0xFF181A20); // 卡片：明显比底亮，强图底对比
-  static const _surfaceRaised = Color(0xFF21242D); // hover / 抬升
-  static const _surfaceInset = Color(0xFF0A0B0E); // 输入框 / 代码块内凹
-  static const _textPrimary = Color(0xFFF7F8F8); // 冷近白
-  static const _textMuted = Color(0xFF8A8F98); // Linear 同款次级灰
-  static const _textTertiary = Color(0xFF6E7178); // 三级
-  static const _border = Color(0x17FFFFFF); // hairline @0.09 冷白
-  static const _divider = Color(0x0FFFFFFF); // @0.06
-  static const _accent = Color(0xFF5E6AD2); // Linear 品牌蓝紫
-  static const _accentHover = Color(0xFF6E7AE0);
-  static const _onAccent = Color(0xFFFFFFFF);
-  static const _accentRowTint = Color(0x1F5E6AD2); // 当前行底 @0.12
-  static const _statusOk = Color(0xFF4CB782); // Linear 绿
-  static const _statusWarn = Color(0xFFF2C94C);
-  static const _statusError = Color(0xFFEB5757);
+  // ── Linear 冷调深蓝黑(暗色) ────────────────────────────────────────────
+  static const _darkPalette = _Palette(
+    brightness: Brightness.dark,
+    baseBg: Color(0xFF0E0F13),
+    surface: Color(0xFF181A20),
+    surfaceRaised: Color(0xFF21242D),
+    surfaceInset: Color(0xFF0A0B0E),
+    textPrimary: Color(0xFFF7F8F8),
+    textMuted: Color(0xFF8A8F98),
+    textTertiary: Color(0xFF6E7178),
+    border: Color(0x17FFFFFF),
+    divider: Color(0x0FFFFFFF),
+    accent: Color(0xFF5E6AD2),
+    accentHover: Color(0xFF6E7AE0),
+    onAccent: Color(0xFFFFFFFF),
+    accentRowTint: Color(0x1F5E6AD2),
+    statusOk: Color(0xFF4CB782),
+    statusWarn: Color(0xFFF2C94C),
+    statusError: Color(0xFFEB5757),
+  );
 
-  static ThemeData get dark {
-    const scheme = ColorScheme.dark(
-      brightness: Brightness.dark,
-      primary: _accent,
-      onPrimary: _onAccent,
-      primaryContainer: _accentRowTint,
-      onPrimaryContainer: _accent,
-      secondary: _accentHover,
-      onSecondary: _onAccent,
-      surface: _surface,
-      onSurface: _textPrimary,
-      onSurfaceVariant: _textMuted,
-      surfaceContainerLowest: _surfaceInset,
-      surfaceContainerLow: _baseBg,
-      surfaceContainer: _surface,
-      surfaceContainerHigh: _surfaceRaised,
-      surfaceContainerHighest: _surfaceRaised,
-      surfaceDim: _baseBg,
-      outline: _border,
-      outlineVariant: _divider,
-      error: _statusError,
-      onError: _textPrimary,
+  // ── 亮色(冷调浅灰,与暗色同品牌蓝紫) ──────────────────────────────────
+  static const _lightPalette = _Palette(
+    brightness: Brightness.light,
+    baseBg: Color(0xFFFBFBFC), // 近白画布
+    surface: Color(0xFFFFFFFF), // 卡片纯白
+    surfaceRaised: Color(0xFFF1F2F5), // hover/抬升 浅灰
+    surfaceInset: Color(0xFFF4F5F7), // 输入框/代码块内凹
+    textPrimary: Color(0xFF1C1D21), // 冷近黑
+    textMuted: Color(0xFF6B7079), // 次级灰
+    textTertiary: Color(0xFF8A8F98), // 三级
+    border: Color(0x14000000), // hairline @0.08 黑
+    divider: Color(0x0A000000), // @0.04
+    accent: Color(0xFF5E6AD2), // 同品牌蓝紫
+    accentHover: Color(0xFF4E5AC0),
+    onAccent: Color(0xFFFFFFFF),
+    accentRowTint: Color(0x1A5E6AD2), // 当前行底 @0.10
+    statusOk: Color(0xFF2E9E6B),
+    statusWarn: Color(0xFFC79A1E),
+    statusError: Color(0xFFD64545),
+  );
+
+  static ThemeData get dark => _build(_darkPalette);
+  static ThemeData get light => _build(_lightPalette);
+
+  static ThemeData _build(_Palette p) {
+    final scheme = ColorScheme(
+      brightness: p.brightness,
+      primary: p.accent,
+      onPrimary: p.onAccent,
+      primaryContainer: p.accentRowTint,
+      onPrimaryContainer: p.accent,
+      secondary: p.accentHover,
+      onSecondary: p.onAccent,
+      surface: p.surface,
+      onSurface: p.textPrimary,
+      onSurfaceVariant: p.textMuted,
+      surfaceContainerLowest: p.surfaceInset,
+      surfaceContainerLow: p.baseBg,
+      surfaceContainer: p.surface,
+      surfaceContainerHigh: p.surfaceRaised,
+      surfaceContainerHighest: p.surfaceRaised,
+      surfaceDim: p.baseBg,
+      outline: p.border,
+      outlineVariant: p.divider,
+      error: p.statusError,
+      onError: p.onAccent,
     );
 
     final base = ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
-      scaffoldBackgroundColor: _baseBg,
+      scaffoldBackgroundColor: p.baseBg,
     );
 
     // ── 全 Inter（Linear 风：无衬线，紧凑），数字用等宽 tabular ────────────
@@ -102,7 +171,7 @@ class AppTheme {
     final mono = GoogleFonts.jetBrainsMono(
       fontSize: 13,
       fontWeight: FontWeight.w500,
-      color: _textPrimary,
+      color: p.textPrimary,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
 
@@ -110,7 +179,7 @@ class AppTheme {
           fontWeight: FontWeight.w600,
           fontSize: size,
           letterSpacing: spacing,
-          color: _textPrimary,
+          color: p.textPrimary,
           height: 1.2,
         );
 
@@ -124,71 +193,71 @@ class AppTheme {
             fontSize: 13,
             fontWeight: FontWeight.w600,
             letterSpacing: -0.1,
-            color: _textPrimary,
+            color: p.textPrimary,
           ),
           // SECTION LABEL: 小型大写标签。
           labelLarge: GoogleFonts.inter(
             fontSize: 11,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.6,
-            color: _textMuted,
+            color: p.textMuted,
           ),
           bodyMedium: GoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w400,
             height: 1.5,
             letterSpacing: -0.08,
-            color: _textPrimary,
+            color: p.textPrimary,
           ),
           bodySmall: GoogleFonts.inter(
             fontSize: 12,
             fontWeight: FontWeight.w400,
             height: 1.45,
-            color: _textTertiary,
+            color: p.textTertiary,
           ),
         )
-        .apply(bodyColor: _textPrimary, displayColor: _textPrimary);
+        .apply(bodyColor: p.textPrimary, displayColor: p.textPrimary);
 
     return base.copyWith(
       textTheme: textTheme,
       extensions: <ThemeExtension<dynamic>>[
         AppSurfaces(
-          statusOk: _statusOk,
-          statusWarn: _statusWarn,
-          statusError: _statusError,
+          statusOk: p.statusOk,
+          statusWarn: p.statusWarn,
+          statusError: p.statusError,
           mono: mono,
         ),
       ],
-      dividerTheme: const DividerThemeData(color: _divider, space: 1),
+      dividerTheme: DividerThemeData(color: p.divider, space: 1),
       cardTheme: CardThemeData(
-        color: _surface,
+        color: p.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
-          side: const BorderSide(color: _border),
+          side: BorderSide(color: p.border),
         ),
       ),
-      navigationRailTheme: const NavigationRailThemeData(
+      navigationRailTheme: NavigationRailThemeData(
         backgroundColor: Colors.transparent,
-        indicatorColor: _accentRowTint,
-        selectedIconTheme: IconThemeData(color: _accent, size: 20),
-        unselectedIconTheme: IconThemeData(color: _textMuted, size: 20),
+        indicatorColor: p.accentRowTint,
+        selectedIconTheme: IconThemeData(color: p.accent, size: 20),
+        unselectedIconTheme: IconThemeData(color: p.textMuted, size: 20),
         labelType: NavigationRailLabelType.none,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: _surfaceInset,
+        fillColor: p.surfaceInset,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _border),
+          borderSide: BorderSide(color: p.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _border),
+          borderSide: BorderSide(color: p.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _accent, width: 2),
+          borderSide: BorderSide(color: p.accent, width: 2),
         ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -196,8 +265,8 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: _accent,
-          foregroundColor: _onAccent,
+          backgroundColor: p.accent,
+          foregroundColor: p.onAccent,
           elevation: 0,
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
           shape:
@@ -207,8 +276,8 @@ class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: _accent,
-          foregroundColor: _onAccent,
+          backgroundColor: p.accent,
+          foregroundColor: p.onAccent,
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -217,23 +286,23 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: _textPrimary,
-          side: const BorderSide(color: _border),
+          foregroundColor: p.textPrimary,
+          side: BorderSide(color: p.border),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: _surfaceRaised,
-        side: const BorderSide(color: _border),
+        backgroundColor: p.surfaceRaised,
+        side: BorderSide(color: p.border),
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-        labelStyle: const TextStyle(color: _textPrimary, fontSize: 12),
+        labelStyle: TextStyle(color: p.textPrimary, fontSize: 12),
       ),
-      listTileTheme: const ListTileThemeData(
+      listTileTheme: ListTileThemeData(
         tileColor: Colors.transparent,
-        selectedTileColor: _accentRowTint,
+        selectedTileColor: p.accentRowTint,
       ),
     );
   }

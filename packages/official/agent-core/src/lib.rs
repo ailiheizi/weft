@@ -443,6 +443,8 @@ struct SendSessionMessageInput {
     agent: Option<SessionAgentInput>,
     #[serde(default)]
     delegate_request: Option<DelegateRequestInput>,
+    #[serde(default)]
+    selected_tools: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -686,16 +688,175 @@ fn history_key(agent: &str) -> String {
     format!("agent-core:history:{}", agent)
 }
 
+const HISTORY_DB_PATH: &str = "./data/agent-core-history.db";
+
+/// Ensure the SQLite table for history persistence exists.
+fn ensure_history_table() {
+    let _ = sqlite_execute(
+        HISTORY_DB_PATH,
+        "CREATE TABLE IF NOT EXISTS history (agent TEXT PRIMARY KEY, messages TEXT NOT NULL, updated_at INTEGER NOT NULL DEFAULT 0)",
+        &[],
+    );
+}
+
 fn get_history(agent: &str) -> Vec<Value> {
-    match kv_get(&history_key(agent)) {
-        Some(json) => serde_json::from_str(&json).unwrap_or_default(),
-        None => vec![],
+    // Try KV first (hot cache).
+    if let Some(json) = kv_get(&history_key(agent)) {
+        let msgs: Vec<Value> = serde_json::from_str(&json).unwrap_or_default();
+        if !msgs.is_empty() {
+            return msgs;
+        }
     }
+    // Fallback: restore from SQLite.
+    ensure_history_table();
+    if let Ok(result) = sqlite_query(
+        HISTORY_DB_PATH,
+        "SELECT messages FROM history WHERE agent = ?1",
+        &[Value::String(agent.to_string())],
+    ) {
+        if let Some(row) = result.rows.first() {
+            if let Some(json_val) = row.first().and_then(Value::as_str) {
+                let msgs: Vec<Value> = serde_json::from_str(json_val).unwrap_or_default();
+                if !msgs.is_empty() {
+                    // Re-populate KV cache.
+                    kv_set(&history_key(agent), json_val);
+                    return msgs;
+                }
+            }
+        }
+    }
+    vec![]
 }
 
 fn save_history(agent: &str, history: &[Value]) {
     let json = serde_json::to_string(history).unwrap_or_else(|_| "[]".into());
+    // Write to KV (hot cache).
     kv_set(&history_key(agent), &json);
+    // Persist to SQLite.
+    ensure_history_table();
+    let _ = sqlite_execute(
+        HISTORY_DB_PATH,
+        "INSERT OR REPLACE INTO history (agent, messages, updated_at) VALUES (?1, ?2, ?3)",
+        &[
+            Value::String(agent.to_string()),
+            Value::String(json),
+            Value::Number(serde_json::Number::from(now_ms())),
+        ],
+    );
+}
+
+/// Undo the last N conversation rounds (a round = one user message + all subsequent
+/// assistant/tool messages until the next user message or end).
+fn do_undo_round(agent: &str, rounds: usize) -> PackageResult {
+    if agent.is_empty() {
+        return PackageResult::err("agent name is required");
+    }
+    if rounds == 0 {
+        return PackageResult::ok(serde_json::json!({"undone_rounds": 0, "remaining": 0}));
+    }
+
+    let mut history = get_history(agent);
+    if history.is_empty() {
+        return PackageResult::ok(serde_json::json!({"undone_rounds": 0, "remaining": 0}));
+    }
+
+    // Walk backwards, counting user messages as round boundaries.
+    let original_len = history.len();
+    let mut user_count = 0usize;
+    let mut cut_index = history.len();
+
+    for i in (0..history.len()).rev() {
+        let role = history[i].get("role").and_then(Value::as_str).unwrap_or("");
+        if role == "user" {
+            user_count += 1;
+            cut_index = i;
+            if user_count >= rounds {
+                break;
+            }
+        }
+    }
+
+    history.truncate(cut_index);
+    save_history(agent, &history);
+
+    let removed = original_len - history.len();
+    PackageResult::ok(serde_json::json!({
+        "undone_rounds": user_count.min(rounds),
+        "removed_messages": removed,
+        "remaining": history.len(),
+    }))
+}
+
+/// Build a structured display payload for tool outputs so the frontend can render
+/// rich visualization (cards, code blocks, images, etc.) instead of plain text.
+/// Returns `Value::Null` when no special visualization applies.
+fn build_tool_display(tool_name: &str, output: &str, is_error: bool) -> Value {
+    if is_error {
+        return serde_json::json!({"type": "error", "message": truncate_event_text(output, 1000)});
+    }
+    match tool_name {
+        "web_search" | "tavily_search" => {
+            // Try to parse as JSON array of search results
+            if let Ok(results) = serde_json::from_str::<Value>(output) {
+                return serde_json::json!({"type": "search_results", "data": results});
+            }
+            Value::Null
+        }
+        "fs_read" | "file_read" => {
+            serde_json::json!({
+                "type": "code",
+                "content": truncate_event_text(output, 8000),
+                "language": detect_language_hint(output),
+            })
+        }
+        "shell_exec" | "run_command" => {
+            serde_json::json!({
+                "type": "terminal",
+                "output": truncate_event_text(output, 8000),
+            })
+        }
+        "browser_screenshot" => {
+            // Output typically contains a file path or base64 image
+            serde_json::json!({"type": "image", "data": truncate_event_text(output, 4000)})
+        }
+        "browser_snapshot" => {
+            serde_json::json!({"type": "a11y_tree", "content": truncate_event_text(output, 8000)})
+        }
+        "browser_navigate" => {
+            serde_json::json!({"type": "navigation", "data": truncate_event_text(output, 500)})
+        }
+        "semantic_select" => {
+            if let Ok(results) = serde_json::from_str::<Value>(output) {
+                return serde_json::json!({"type": "selector_results", "data": results});
+            }
+            Value::Null
+        }
+        "image_generate" | "image_gen" => {
+            serde_json::json!({"type": "image", "data": truncate_event_text(output, 4000)})
+        }
+        _ => Value::Null,
+    }
+}
+
+/// Simple heuristic to guess the language from file content for syntax highlighting.
+fn detect_language_hint(content: &str) -> &'static str {
+    let trimmed = content.trim_start();
+    if trimmed.starts_with('{') || trimmed.starts_with('[') {
+        return "json";
+    }
+    if trimmed.starts_with("<!DOCTYPE") || trimmed.starts_with("<html") {
+        return "html";
+    }
+    if trimmed.starts_with("fn ") || trimmed.starts_with("use ") || trimmed.contains("pub fn") {
+        return "rust";
+    }
+    if trimmed.starts_with("import ") || trimmed.starts_with("from ") || trimmed.contains("def ") {
+        return "python";
+    }
+    if trimmed.starts_with("const ") || trimmed.starts_with("function ") || trimmed.contains("=> {") {
+        return "javascript";
+    }
+    "text"
 }
 
 fn get_sessions_index() -> Vec<String> {
@@ -1036,6 +1197,11 @@ fn record_failure_learning(config: &AgentConfig, trajectory: &AgentTrajectory) {
     }
 
     let memory_package = non_empty_or(&config.memory_package, "memory").to_string();
+    // Skip memory storage if session is in private mode.
+    let session_for_privacy = session_id_from_agent_name(&trajectory.agent).unwrap_or_default();
+    if kv_get(&format!("private:{}", session_for_privacy)).as_deref() == Some("1") {
+        return;
+    }
     let payload = serde_json::json!({
         "agent": trajectory.agent,
         "key": format!("experience:{}", trajectory.id),
@@ -1123,6 +1289,31 @@ fn session_messages_key(id: &str) -> String {
 
 fn load_session(id: &str) -> Option<SessionRecord> {
     kv_get(&session_key(id)).and_then(|json| serde_json::from_str(&json).ok())
+}
+
+/// 会话的工作区根:优先用 session.workspace_root,为空则回退默认
+/// `data/workspaces/<session_id>`(相对 core 进程 cwd,即项目根下 data/)。
+/// 这样未显式设工作区的会话也不再把文件散落到项目根,而是集中到 data/workspaces。
+fn session_workspace_root(session_id: &str) -> String {
+    if let Some(session) = load_session(session_id) {
+        let ws = session.workspace_root.trim();
+        if !ws.is_empty() {
+            return ws.to_string();
+        }
+    }
+    default_workspace_root(session_id)
+}
+
+fn default_workspace_root(session_id: &str) -> String {
+    let mut sanitized = String::with_capacity(session_id.len());
+    for ch in session_id.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+            sanitized.push(ch);
+        } else {
+            sanitized.push('-');
+        }
+    }
+    format!("data\\workspaces\\{}", sanitized)
 }
 
 fn save_session(session: &SessionRecord) {
@@ -1309,9 +1500,23 @@ fn execute_skill_action(
     agent_name: &str,
     tool_name: &str,
     args: Value,
+    workspace_root: &str,
 ) -> String {
     if let Some(result) = execute_js_runtime_tool(agent_name, tool_name, &args) {
         return result;
+    }
+
+    // 注入会话工作区根:tool-runtime-core 是隔离 wasm,读不到 agent-core 的 session,
+    // 只能经 args 透传。fs_write/read/list、shell_exec 据此把相对路径落到工作区,
+    // 不再散落进程 cwd(项目根)。
+    let mut forwarded = args;
+    if !workspace_root.trim().is_empty() {
+        if let Some(obj) = forwarded.as_object_mut() {
+            obj.insert(
+                "__workspace_root".to_string(),
+                Value::String(workspace_root.trim().to_string()),
+            );
+        }
     }
 
     call_skills_ws_action(
@@ -1320,7 +1525,7 @@ fn execute_skill_action(
         &serde_json::json!({
             "agent": agent_name,
             "tool": tool_name,
-            "args": args,
+            "args": forwarded,
         }),
     )
     .unwrap_or_else(|error| format!(r#"{{"error":"{}"}}"#, error))
@@ -2450,7 +2655,44 @@ fn build_completion_request(
         .and_then(|value| serde_json::from_value(value).ok())
         .unwrap_or_default();
     if !planning_only {
-        tools.extend(virtual_capability_tool_specs(config));
+        // Tool injection strategy: always-on tools are always injected;
+        // selectable tools are only injected when selected_tools KV is set.
+        let all_virtual = virtual_capability_tools(config);
+        let selected_tools_json = session_id_from_agent_name(&config.name)
+            .and_then(|sid| kv_get(&format!("selected_tools:{}", sid)));
+        let selected_tool_names: Option<Vec<String>> = selected_tools_json
+            .and_then(|j| serde_json::from_str(&j).ok());
+
+        let filtered_virtual: Vec<_> = all_virtual
+            .into_iter()
+            .filter(|tool| {
+                // Always-on: meta-capabilities that aren't "work" tools.
+                const ALWAYS_ON: &[&str] = &["ask_user", "delegate_to_team", "semantic_select"];
+                if ALWAYS_ON.contains(&tool.name) {
+                    return true;
+                }
+                // If no selection specified, inject all (backward compatible).
+                match &selected_tool_names {
+                    None => true,
+                    Some(names) => names.iter().any(|n| n == tool.name),
+                }
+            })
+            .collect();
+
+        let virtual_specs: Vec<Value> = filtered_virtual
+            .iter()
+            .map(|tool| {
+                serde_json::json!({
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": tool.parameters,
+                    }
+                })
+            })
+            .collect();
+        tools.extend(virtual_specs);
     }
     tools.sort_by(|a, b| {
         let name_a = a.get("function").and_then(|f| f.get("name")).and_then(Value::as_str).unwrap_or("");
@@ -2539,6 +2781,35 @@ fn build_completion_request(
                 }
                 dynamic_context.push_str("[Inbox messages]\n");
                 dynamic_context.push_str(&serde_json::to_string_pretty(&inbox).unwrap_or_default());
+            }
+        }
+    }
+    // Inject selected MCP tool descriptions into dynamic context.
+    // When selected_tools contains "mcp:server:tool" entries, we fetch the tool
+    // descriptions from mcp-client and append a hint so AI knows to use ext_mcp_call_tool.
+    {
+        let mcp_selected: Option<Vec<String>> = session_id_from_agent_name(&config.name)
+            .and_then(|sid| kv_get(&format!("selected_tools:{}", sid)))
+            .and_then(|j| serde_json::from_str(&j).ok());
+        if let Some(ref names) = mcp_selected {
+            let mcp_entries: Vec<&String> = names.iter().filter(|n| n.starts_with("mcp:")).collect();
+            if !mcp_entries.is_empty() {
+                if !dynamic_context.is_empty() {
+                    dynamic_context.push_str("\n\n");
+                }
+                dynamic_context.push_str("[Available MCP tools — call via ext_mcp_call_tool]\n");
+                for entry in &mcp_entries {
+                    // Format: "mcp:server_name:tool_name"
+                    let parts: Vec<&str> = entry.splitn(3, ':').collect();
+                    if parts.len() == 3 {
+                        let server = parts[1];
+                        let tool = parts[2];
+                        dynamic_context.push_str(&format!(
+                            "- server=\"{}\" tool=\"{}\"\n", server, tool
+                        ));
+                    }
+                }
+                dynamic_context.push_str("To call these tools, use ext_mcp_call_tool with the server and tool names above.");
             }
         }
     }
@@ -3297,6 +3568,21 @@ fn parse_completion_error(response_value: &Value) -> Option<String> {
 
 fn visible_assistant_reply(raw: &str) -> String {
     let normalized = raw.replace("\r\n", "\n").replace('\r', "\n");
+    // 防御:若整段是协议 JSON({"mode":...,"assistant":...,"tool_calls":...}),
+    // 提取 assistant 字段而非原样返回——否则原始协议 JSON 会泄漏给用户(尤其
+    // 历史消息存储后切回会话时)。
+    let trimmed = normalized.trim();
+    if trimmed.starts_with('{') && trimmed.contains("\"mode\"") {
+        if let Ok(Value::Object(map)) = serde_json::from_str::<Value>(trimmed) {
+            if let Some(assistant) = map.get("assistant").and_then(Value::as_str) {
+                return visible_assistant_reply(assistant);
+            }
+            // 是协议 JSON 但无 assistant 文本(纯工具轮):不泄漏 JSON,返回空。
+            if map.contains_key("tool_calls") || map.get("mode").is_some() {
+                return String::new();
+            }
+        }
+    }
     if let Some(index) = normalized.find("\n[Tool: ") {
         return normalized[..index].trim().to_string();
     }
@@ -3635,6 +3921,8 @@ enum VirtualCapabilitySummaryKind {
     ChannelSend,
     DelegateToTeam,
     AskUser,
+    BrowserTool,
+    SelectorTool,
 }
 
 #[derive(Clone, Debug)]
@@ -3680,6 +3968,12 @@ fn provider_candidates_for_capability(config: &AgentConfig, capability: &str) ->
         }
         "team.taskboard" => {
             push_unique_provider_candidate(&mut providers, "team-task-board");
+        }
+        "tool.browser" => {
+            push_unique_provider_candidate(&mut providers, "tool-browser");
+        }
+        "tool.selector" => {
+            push_unique_provider_candidate(&mut providers, "tool-selector");
         }
         _ => {}
     }
@@ -3898,6 +4192,116 @@ fn virtual_capability_tools(config: &AgentConfig) -> Vec<VirtualCapabilityToolSp
             }),
             provider_candidates: provider_candidates_for_capability(config, "channel.bridge"),
             summary_kind: VirtualCapabilitySummaryKind::ChannelSend,
+        },
+        VirtualCapabilityToolSpec {
+            name: "browser_navigate",
+            capability: "tool.browser",
+            action: "navigate",
+            description: "Navigate the automated browser to a URL. Starts a browser session automatically if needed. Use this to open a web page before reading or interacting with it.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The URL to open in the automated browser"
+                    }
+                },
+                "required": ["url"]
+            }),
+            provider_candidates: provider_candidates_for_capability(config, "tool.browser"),
+            summary_kind: VirtualCapabilitySummaryKind::BrowserTool,
+        },
+        VirtualCapabilityToolSpec {
+            name: "browser_snapshot",
+            capability: "tool.browser",
+            action: "snapshot",
+            description: "Take an accessibility-tree snapshot of the current page. Returns page elements each with a unique uid. You MUST call this before browser_click/browser_fill to obtain the uid of the element you want to interact with.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {},
+                "required": []
+            }),
+            provider_candidates: provider_candidates_for_capability(config, "tool.browser"),
+            summary_kind: VirtualCapabilitySummaryKind::BrowserTool,
+        },
+        VirtualCapabilityToolSpec {
+            name: "browser_click",
+            capability: "tool.browser",
+            action: "click",
+            description: "Click an element on the page identified by its uid (obtained from browser_snapshot).",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "description": "The element uid from a prior browser_snapshot"
+                    }
+                },
+                "required": ["uid"]
+            }),
+            provider_candidates: provider_candidates_for_capability(config, "tool.browser"),
+            summary_kind: VirtualCapabilitySummaryKind::BrowserTool,
+        },
+        VirtualCapabilityToolSpec {
+            name: "browser_fill",
+            capability: "tool.browser",
+            action: "fill",
+            description: "Fill a text input or select field identified by its uid (from browser_snapshot) with a value.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "description": "The element uid from a prior browser_snapshot"
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "The text/value to enter into the element"
+                    }
+                },
+                "required": ["uid", "value"]
+            }),
+            provider_candidates: provider_candidates_for_capability(config, "tool.browser"),
+            summary_kind: VirtualCapabilitySummaryKind::BrowserTool,
+        },
+        VirtualCapabilityToolSpec {
+            name: "browser_screenshot",
+            capability: "tool.browser",
+            action: "screenshot",
+            description: "Take a screenshot of the current browser page. Returns image data.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {},
+                "required": []
+            }),
+            provider_candidates: provider_candidates_for_capability(config, "tool.browser"),
+            summary_kind: VirtualCapabilitySummaryKind::BrowserTool,
+        },
+        VirtualCapabilityToolSpec {
+            name: "semantic_select",
+            capability: "tool.selector",
+            action: "select",
+            description: "Semantically match a natural-language query against a candidate library and return the top-k best matches. Use for fast tool routing, asset/material selection, or any scenario where you need to pick the most relevant item from a known set. Latency: 5-50ms, no LLM call needed.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Natural language query describing what you're looking for"
+                    },
+                    "library": {
+                        "type": "string",
+                        "description": "Name of the candidate library to search in (e.g. 'tools', 'actions', 'expressions', 'backgrounds')"
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Number of top matches to return (default: 3)"
+                    }
+                },
+                "required": ["query", "library"]
+            }),
+            provider_candidates: provider_candidates_for_capability(config, "tool.selector"),
+            summary_kind: VirtualCapabilitySummaryKind::SelectorTool,
         },
     ];
     // 子 agent 过滤掉 delegate_to_team(防嵌套委托)。
@@ -4142,7 +4546,9 @@ fn build_virtual_capability_payload(
     args: &Value,
 ) -> Value {
     match route.capability {
-        "ext.mcp" | "channel.bridge" => with_default_agent_arg(args, agent_name),
+        "ext.mcp" | "channel.bridge" | "tool.browser" | "tool.selector" => {
+            with_default_agent_arg(args, agent_name)
+        }
         _ => args.clone(),
     }
 }
@@ -4157,7 +4563,7 @@ fn execute_virtual_capability_tool(
     // 单独处理：建一个 board + 一个 intake 任务，后台 orchestrator tick/dispatch
     // 会自动跑完 plan→execute→review→integrate→done。返回 board_id 供追踪。
     if route.name == "delegate_to_team" {
-        return execute_delegate_to_team(route, args);
+        return execute_delegate_to_team(route, args, session_id);
     }
     if route.name == "ask_user" {
         return execute_ask_user(session_id, args);
@@ -4188,7 +4594,11 @@ fn execute_virtual_capability_tool(
 
 /// 启动一次团队编排：create_board + save_task(intake)。
 /// 后台 orchestrator 的 tick/dispatch 循环会自动推进所有阶段。
-fn execute_delegate_to_team(route: &VirtualCapabilityToolSpec, args: &Value) -> String {
+fn execute_delegate_to_team(
+    route: &VirtualCapabilityToolSpec,
+    args: &Value,
+    origin_session_id: &str,
+) -> String {
     let goal = args
         .get("goal")
         .and_then(Value::as_str)
@@ -4213,6 +4623,14 @@ fn execute_delegate_to_team(route: &VirtualCapabilityToolSpec, args: &Value) -> 
     if let Some(ws) = args.get("workspace_dir").and_then(Value::as_str) {
         if !ws.trim().is_empty() {
             board_meta["workspace_dir"] = Value::String(ws.trim().to_string());
+        }
+    }
+    // 未显式指定 workspace_dir 时,继承发起会话的工作区,使团队产物与用户其他文件同处一地,
+    // 而不是落到各自的 orch- 临时会话目录。
+    if board_meta.get("workspace_dir").is_none() && !origin_session_id.trim().is_empty() {
+        let ws = session_workspace_root(origin_session_id);
+        if !ws.trim().is_empty() {
+            board_meta["workspace_dir"] = Value::String(ws);
         }
     }
 
@@ -4254,6 +4672,19 @@ fn execute_delegate_to_team(route: &VirtualCapabilityToolSpec, args: &Value) -> 
     if let Err(e) = try_call("save_task", &task_payload) {
         return PackageResult::err(format!("delegate_to_team save_task failed: {}", e)).to_json();
     }
+
+    // Emit delegate_started event so the frontend can switch to child session view.
+    append_session_event(
+        origin_session_id,
+        "session.delegate_started",
+        serde_json::json!({
+            "board_id": board_id,
+            "child_session_id": session_id,
+            "goal": goal,
+            "title": title,
+            "started_at": ts,
+        }),
+    );
 
     PackageResult::ok(serde_json::json!({
         "board_id": board_id,
@@ -4465,6 +4896,8 @@ fn summarize_virtual_capability_output(
                 to
             ))
         }
+        VirtualCapabilitySummaryKind::BrowserTool => None,
+        VirtualCapabilitySummaryKind::SelectorTool => None,
     }
 }
 
@@ -5096,8 +5529,10 @@ fn execute_local_tool_route(
     agent_name: &str,
     tool_name: &str,
     args: Value,
+    workspace_root: &str,
 ) -> String {
-    let tool_result = execute_skill_action(skills_package, agent_name, tool_name, args.clone());
+    let tool_result =
+        execute_skill_action(skills_package, agent_name, tool_name, args.clone(), workspace_root);
     let tool_outputs = vec![ToolExecution {
         name: normalize_js_runtime_tool_name(tool_name),
         args,
@@ -5641,6 +6076,7 @@ fn run_agent_completion(
                     &config.name,
                     "fs_read",
                     execute_input,
+                    &session_workspace_root(session_id),
                 );
                 append_debug_log(&format!(
                     "direct fs_read route done agent={} result_len={}",
@@ -6027,9 +6463,11 @@ fn run_agent_completion(
                         &config.name,
                         &function_name,
                         function_args.clone(),
+                        &session_workspace_root(session_id),
                     )
                 };
             let is_error = tool_result_is_error(&tool_result);
+            let display = build_tool_display(&function_name, &tool_result, is_error);
             append_session_event(
                 session_id,
                 "tool.finished",
@@ -6042,6 +6480,7 @@ fn run_agent_completion(
                     "output_preview": truncate_event_text(&tool_result, 4000),
                     "output_len": tool_result.len(),
                     "finished_at": now_ms(),
+                    "display": display,
                 }),
             );
             // Hook: after_tool_call — fire-and-forget notification.
@@ -6535,6 +6974,15 @@ fn do_send_session_message(input: SendSessionMessageInput) -> PackageResult {
     ensure_session_records_from_legacy_agents();
     let input_content = decode_transport_text(&input.content, &input.content_b64);
 
+    // Store selected_tools in session KV for the turn builder to read.
+    if !input.selected_tools.is_empty() {
+        let tools_json = serde_json::to_string(&input.selected_tools)
+            .unwrap_or_else(|_| "[]".into());
+        kv_set(&format!("selected_tools:{}", input.session_id), &tools_json);
+    } else {
+        let _ = kv_delete(&format!("selected_tools:{}", input.session_id));
+    }
+
     let mut session = match load_session(&input.session_id) {
         Some(session) => session,
         None => return PackageResult::err(format!("session '{}' not found", input.session_id)),
@@ -6813,15 +7261,62 @@ pub fn handle_ws_message(input: String) -> FnResult<String> {
                 content_b64: String,
                 #[serde(default)]
                 delegate_request: Option<DelegateRequestInput>,
+                /// Per-message model override (shorthand — merged into delegate_request).
+                #[serde(default)]
+                model: Option<String>,
+                /// Per-message provider override (shorthand — merged into delegate_request).
+                #[serde(default)]
+                provider: Option<String>,
+                /// Privacy mode: skip memory storage for this turn.
+                #[serde(default)]
+                private: bool,
+                /// Tool selection: only these tools (by name) will be injected for this turn.
+                /// Empty = inject all (backward compatible). Non-empty = only these + always-on.
+                #[serde(default)]
+                selected_tools: Vec<String>,
             }
 
             match serde_json::from_value::<SendMessageActionInput>(req.data) {
                 Ok(input) => {
                     let content = decode_transport_text(&input.content, &input.content_b64);
+                    let sid = session_id_from_agent_name(&input.agent)
+                        .unwrap_or_default();
+                    // Set privacy flag in session KV so memory hooks can check it.
+                    if input.private {
+                        kv_set(&format!("private:{}", sid), "1");
+                    }
+                    // Store selected_tools in session KV for the turn builder to read.
+                    if !input.selected_tools.is_empty() {
+                        let tools_json = serde_json::to_string(&input.selected_tools)
+                            .unwrap_or_else(|_| "[]".into());
+                        kv_set(&format!("selected_tools:{}", sid), &tools_json);
+                    } else {
+                        let _ = kv_delete(&format!("selected_tools:{}", sid));
+                    }
+                    // Merge top-level model/provider into delegate_request if present.
+                    let delegate = match input.delegate_request {
+                        Some(mut dr) => {
+                            if dr.model_override.is_none() {
+                                dr.model_override = input.model;
+                            }
+                            if dr.provider_override.is_none() {
+                                dr.provider_override = input.provider;
+                            }
+                            Some(dr)
+                        }
+                        None if input.model.is_some() || input.provider.is_some() => {
+                            Some(DelegateRequestInput {
+                                model_override: input.model,
+                                provider_override: input.provider,
+                                ..Default::default()
+                            })
+                        }
+                        None => None,
+                    };
                     do_send_message_with_delegate(
                         &input.agent,
                         &content,
-                        input.delegate_request.as_ref(),
+                        delegate.as_ref(),
                     )
                 }
                 Err(_) => PackageResult::err("invalid send_message payload"),
@@ -6946,6 +7441,7 @@ pub fn handle_ws_message(input: String) -> FnResult<String> {
                 content_b64: String::new(),
                 agent: None,
                 delegate_request: None,
+                selected_tools: Vec::new(),
             }),
         ),
         "route_delegate" | "get_delegate_contract" => {
@@ -6954,6 +7450,11 @@ pub fn handle_ws_message(input: String) -> FnResult<String> {
             do_team_delegate_route(payload)
         }
         "get_debug_trace" => do_get_debug_trace(),
+        "undo_round" => {
+            let agent = req.data["agent"].as_str().unwrap_or("");
+            let rounds = req.data["rounds"].as_u64().unwrap_or(1) as usize;
+            do_undo_round(agent, rounds)
+        }
         _ => PackageResult::err(format!("unknown action: {}", req.action)),
     };
     write_file("./data/agent-core-last-ws.txt", "stage=ws_return");
@@ -7166,6 +7667,7 @@ mod tests {
             skill_refs: vec![],
             action_refs: vec![],
             event: Value::Null,
+            ..Default::default()
         };
 
         assert!(delegate_request_requires_real_action(Some(&request)));
@@ -7185,6 +7687,7 @@ mod tests {
             skill_refs: vec![],
             action_refs: vec![],
             event: Value::Null,
+            ..Default::default()
         };
 
         assert_eq!(
@@ -7207,6 +7710,7 @@ mod tests {
             skill_refs: vec![],
             action_refs: vec![],
             event: Value::Null,
+            ..Default::default()
         };
 
         assert_eq!(build_tool_call_min_items(Some(&request)), 1);
@@ -7224,6 +7728,7 @@ mod tests {
             skill_refs: vec![],
             action_refs: vec![],
             event: Value::Null,
+            ..Default::default()
         };
 
         let schema =
@@ -7457,6 +7962,7 @@ mod tests {
             skill_refs: vec![],
             action_refs: vec![],
             event: Value::Null,
+            ..Default::default()
         };
 
         assert_eq!(
@@ -7482,6 +7988,7 @@ mod tests {
             skill_refs: vec!["fs_read".to_string()],
             action_refs: vec!["read_skill".to_string()],
             event: serde_json::json!({"type": "tool_lifecycle"}),
+            ..Default::default()
         };
 
         let block = build_delegate_contract_block(Some(&request))
@@ -7507,6 +8014,7 @@ mod tests {
             skill_refs: vec![],
             action_refs: vec![],
             event: Value::Null,
+            ..Default::default()
         };
 
         assert!(!include_auxiliary_planning_context(Some(&request)));
@@ -7525,6 +8033,7 @@ mod tests {
             skill_refs: vec![],
             action_refs: vec![],
             event: Value::Null,
+            ..Default::default()
         };
         let tools = vec![serde_json::json!({
             "type": "function",

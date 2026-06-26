@@ -30,7 +30,7 @@ impl KeySelectorLayer for RoundRobinSelector {
         let available: Vec<usize> = keys
             .iter()
             .enumerate()
-            .filter(|(_, k)| !k.failed)
+            .filter(|(_, k)| k.enabled && !k.failed)
             .map(|(i, _)| i)
             .collect();
 
@@ -61,7 +61,7 @@ impl KeySelectorLayer for FailoverSelector {
     async fn select(&self, provider: &str, keys: &[ApiKeyState]) -> Result<usize> {
         keys.iter()
             .enumerate()
-            .find(|(_, k)| !k.failed)
+            .find(|(_, k)| k.enabled && !k.failed)
             .map(|(i, _)| i)
             .ok_or_else(|| anyhow::anyhow!("No available keys for provider '{}'", provider))
     }
@@ -79,7 +79,7 @@ impl KeySelectorLayer for RandomSelector {
         let available: Vec<usize> = keys
             .iter()
             .enumerate()
-            .filter(|(_, k)| !k.failed)
+            .filter(|(_, k)| k.enabled && !k.failed)
             .map(|(i, _)| i)
             .collect();
 
@@ -106,6 +106,7 @@ mod tests {
                 index: 0,
                 value: "sk-aaa".into(),
                 label: None,
+                enabled: true,
                 failed: false,
                 usage_count: 0,
             },
@@ -113,6 +114,7 @@ mod tests {
                 index: 1,
                 value: "sk-bbb".into(),
                 label: None,
+                enabled: true,
                 failed: false,
                 usage_count: 0,
             },

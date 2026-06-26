@@ -292,12 +292,14 @@ mod tests {
                 keys: vec![ApiKeyConfig {
                     value: "sk-test".into(),
                     label: None,
+                    enabled: true,
                 }],
                 models: vec!["test-model".into()],
             }],
             routing: RoutingConfig {
                 default_provider: Some("test".into()),
                 default_model: Some("test-model".into()),
+                ..Default::default()
             },
             key_strategy: KeyStrategyConfig::default(),
             fallback: FallbackConfig {

@@ -21,6 +21,7 @@ _ProviderConfig _$ProviderConfigFromJson(Map<String, dynamic> json) =>
               ?.map((e) => ApiKeyConfig.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const [],
+      keyCount: (json['key_count'] as num?)?.toInt() ?? 0,
     );
 
 Map<String, dynamic> _$ProviderConfigToJson(_ProviderConfig instance) =>
@@ -30,6 +31,7 @@ Map<String, dynamic> _$ProviderConfigToJson(_ProviderConfig instance) =>
       'format': instance.format,
       'models': instance.models,
       'keys': instance.keys,
+      'key_count': instance.keyCount,
     };
 
 _ApiKeyConfig _$ApiKeyConfigFromJson(Map<String, dynamic> json) =>

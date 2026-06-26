@@ -440,6 +440,8 @@ mod tests {
                 created_at: Some(100),
                 updated_at: Some(150),
             },
+            role_routing: std::collections::HashMap::new(),
+            workspace: String::new(),
         }
     }
 

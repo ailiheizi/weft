@@ -309,6 +309,7 @@ mod tests {
             keys: vec![ApiKeyConfig {
                 value: "sk-test".into(),
                 label: None,
+                enabled: true,
             }],
             models: vec!["gpt-4o".into()],
         }

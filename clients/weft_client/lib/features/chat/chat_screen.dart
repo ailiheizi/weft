@@ -1,17 +1,21 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/models/chat.dart';
-import '../../core/models/chat_session_meta.dart';
 import '../../core/providers/chat_provider.dart';
 import '../../core/providers/data_providers.dart';
+import '../../core/providers/preferences_provider.dart';
 import '../../core/providers/sessions_provider.dart';
+import '../../core/providers/scenes_provider.dart';
+import '../../core/providers/selector_provider.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../shared/widgets/empty_state.dart';
+import '../../shared/widgets/resizable_handle.dart';
+import 'tool_display/tool_registry.dart';
 import 'workspace/artifact.dart';
 import 'workspace/workspace_panel.dart';
 
@@ -28,6 +32,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   final _scrollController = ScrollController();
   late final AnimationController _cursorController;
 
+  /// 用户是否在底部附近(决定流式时是否自动跟随)。
+  bool _atBottom = true;
+
+  /// 右侧工作区宽度(可拖拽调节)。
+  double _workspaceWidth = 420;
+
   @override
   void initState() {
     super.initState();
@@ -35,6 +45,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       vsync: this,
       duration: const Duration(milliseconds: 600),
     )..repeat(reverse: true);
+    _scrollController.addListener(_onScroll);
+    _textController.addListener(_onTextChangedForSelector);
 
     // 启动时若无活跃 session，自动创建一个
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -47,12 +59,40 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     });
   }
 
+  void _onTextChangedForSelector() {
+    final sessionId = ref.read(activeSessionIdProvider);
+    if (sessionId == null) return;
+    ref.read(inputTextProvider(sessionId).notifier).state =
+        _textController.text;
+    ref
+        .read(toolSelectorProvider(sessionId).notifier)
+        .onTextChanged(_textController.text);
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    // 距底部 80px 内视为"在底部"。
+    final atBottom = pos.maxScrollExtent - pos.pixels < 80;
+    if (atBottom != _atBottom) {
+      setState(() => _atBottom = atBottom);
+    }
+  }
+
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _textController.removeListener(_onTextChangedForSelector);
     _textController.dispose();
     _scrollController.dispose();
     _cursorController.dispose();
     super.dispose();
+  }
+
+  /// 自动跟随:仅当用户在底部时滚动(流式增量时调用,不打断向上翻阅)。
+  void _autoFollow() {
+    if (!_atBottom) return;
+    _scrollToBottom();
   }
 
   void _scrollToBottom() {
@@ -71,7 +111,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final text = _textController.text.trim();
     if (text.isEmpty) return;
     _textController.clear();
-    ref.read(chatProvider(sessionId).notifier).sendMessage(text);
+    // Read selected tools before clearing.
+    final selectedTools = ref
+        .read(toolSelectorProvider(sessionId))
+        .selectedToolIds;
+    ref.read(chatProvider(sessionId).notifier).sendMessage(
+      text,
+      selectedTools: selectedTools.isNotEmpty ? selectedTools : null,
+    );
+    ref.read(toolSelectorProvider(sessionId).notifier).clear();
+    // 发送后恢复自动跟随并滚到底部。
+    _atBottom = true;
     _scrollToBottom();
   }
 
@@ -102,16 +152,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       },
       child: Row(
       children: [
-        // ── 左侧 session 列表 ──────────────────────────────────────────────
-        _SessionSidebar(
-          activeSessionId: activeSessionId,
-          onSelectSession: (id) {
-            ref.read(activeSessionIdProvider.notifier).state = id;
-          },
-          onNewChat: _newChat,
-        ),
-        const VerticalDivider(width: 1),
-        // ── 中间聊天区域 ───────────────────────────────────────────────────
+        // ── 中间聊天区域(会话列表已上移到全局侧栏 AppShell)─────────────────
         Expanded(
           child: activeSessionId == null
               ? const Center(child: CircularProgressIndicator())
@@ -124,198 +165,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                   onStop: () => ref
                       .read(chatProvider(activeSessionId).notifier)
                       .stopStreaming(),
-                  scrollToBottom: _scrollToBottom,
+                  scrollToBottom: _autoFollow,
+                  atBottom: _atBottom,
+                  onJumpToBottom: () {
+                    setState(() => _atBottom = true);
+                    _scrollToBottom();
+                  },
                 ),
         ),
-        // ── 右侧工作区面板（类 Manus，按需展开）──────────────────────────────
+        // ── 右侧工作区面板（类 Manus，按需展开,可拖拽调宽）─────────────────────
         if (workspaceOpen && activeSessionId != null) ...[
-          const VerticalDivider(width: 1),
-          Expanded(
-            flex: 1,
+          ResizableHandle(
+            // 向左拖(dx<0)变宽,故取负。clamp 到 [320, 760]。
+            onDelta: (dx) => setState(() {
+              _workspaceWidth = (_workspaceWidth - dx).clamp(320.0, 760.0);
+            }),
+          ),
+          SizedBox(
+            width: _workspaceWidth,
             child: WorkspacePanel(sessionId: activeSessionId),
           ),
         ],
       ],
     ),
-    );
-  }
-}
-
-// ─── Session 侧边栏 ────────────────────────────────────────────────────────────
-
-class _SessionSidebar extends ConsumerWidget {
-  const _SessionSidebar({
-    required this.activeSessionId,
-    required this.onSelectSession,
-    required this.onNewChat,
-  });
-
-  final String? activeSessionId;
-  final ValueChanged<String> onSelectSession;
-  final VoidCallback onNewChat;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final sessions = ref.watch(sessionsProvider);
-
-    return SizedBox(
-      width: 220,
-      child: Column(
-        children: [
-          // New Chat 按钮
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.tonal(
-                onPressed: onNewChat,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.add, size: 16),
-                    SizedBox(width: 6),
-                    Text('New Chat', style: TextStyle(fontSize: 13)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const Divider(height: 1),
-          // Session 列表
-          Expanded(
-            child: sessions.isEmpty
-                ? Center(
-                    child: Text(
-                      'No sessions',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    itemCount: sessions.length,
-                    itemBuilder: (context, index) {
-                      final meta = sessions[index];
-                      final isActive = meta.id == activeSessionId;
-                      return _SessionTile(
-                        meta: meta,
-                        isActive: isActive,
-                        onTap: () => onSelectSession(meta.id),
-                        onDelete: () => ref
-                            .read(sessionsProvider.notifier)
-                            .deleteSession(meta.id),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SessionTile extends StatefulWidget {
-  const _SessionTile({
-    required this.meta,
-    required this.isActive,
-    required this.onTap,
-    required this.onDelete,
-  });
-
-  final ChatSessionMeta meta;
-  final bool isActive;
-  final VoidCallback onTap;
-  final VoidCallback onDelete;
-
-  @override
-  State<_SessionTile> createState() => _SessionTileState();
-}
-
-class _SessionTileState extends State<_SessionTile> {
-  bool _hovered = false;
-
-  String _formatTime(DateTime dt) {
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inDays == 0) return DateFormat('HH:mm').format(dt);
-    if (diff.inDays < 7) return DateFormat('E').format(dt);
-    return DateFormat('MM/dd').format(dt);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: widget.isActive
-                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.56)
-                : _hovered
-                    ? theme.colorScheme.surfaceContainerHigh
-                        .withValues(alpha: 0.48)
-                    : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.meta.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: widget.isActive
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                        color: widget.isActive
-                            ? theme.colorScheme.onPrimaryContainer
-                            : theme.colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _formatTime(widget.meta.updatedAt),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (_hovered || widget.isActive)
-                GestureDetector(
-                  onTap: widget.onDelete,
-                  child: Icon(
-                    Icons.delete_outline,
-                    size: 15,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -331,6 +203,8 @@ class _ChatArea extends ConsumerWidget {
     required this.onSend,
     required this.onStop,
     required this.scrollToBottom,
+    required this.atBottom,
+    required this.onJumpToBottom,
   });
 
   final String sessionId;
@@ -340,6 +214,8 @@ class _ChatArea extends ConsumerWidget {
   final VoidCallback onSend;
   final VoidCallback onStop;
   final VoidCallback scrollToBottom;
+  final bool atBottom;
+  final VoidCallback onJumpToBottom;
 
   /// 最近一条用户消息文本（供输入框 ↑ 键调出重新编辑）。
   String? _lastUserText(List<ChatMessage> messages) {
@@ -364,26 +240,44 @@ class _ChatArea extends ConsumerWidget {
     return Column(
       children: [
         _TopBar(session: session, sessionId: sessionId),
-        const Divider(height: 1),
         Expanded(
           child: noProviders && session.messages.isEmpty
               ? const _NoProviderState()
               : session.messages.isEmpty
-                  ? _EmptyState(session: session)
-                  : _MessageList(
-                      messages: session.messages,
-                      isStreaming: session.isStreaming,
-                      scrollController: scrollController,
-                      cursorController: cursorController,
+                  ? _EmptyState(session: session, textController: textController)
+                  : Stack(
+                      children: [
+                        _MessageList(
+                          sessionId: sessionId,
+                          messages: session.messages,
+                          isStreaming: session.isStreaming,
+                          scrollController: scrollController,
+                          cursorController: cursorController,
+                        ),
+                        // 回到底部悬浮按钮:用户向上翻阅(不在底部)时出现。
+                        if (!atBottom)
+                          Positioned(
+                            right: 16,
+                            bottom: 12,
+                            child: _JumpToBottomButton(
+                              streaming: session.isStreaming,
+                              onTap: onJumpToBottom,
+                            ),
+                          ),
+                      ],
                     ),
         ),
-        const Divider(height: 1),
+        _ToolSelectorChips(sessionId: sessionId),
         _InputBar(
           controller: textController,
           isStreaming: session.isStreaming,
           onSend: onSend,
           onStop: onStop,
           lastUserMessage: _lastUserText(session.messages),
+          fileNames: [
+            for (final a in artifactsFromMessages(session.messages))
+              if (a.kind == ArtifactKind.file) a.title,
+          ],
           disabledHint:
               noProviders ? 'Add an AI provider in Settings to start chatting' : null,
         ),
@@ -417,6 +311,10 @@ class _TopBar extends ConsumerWidget {
                   ?.copyWith(color: theme.colorScheme.primary)),
           const SizedBox(width: 12),
           _WorkspaceToggle(session: session),
+          const SizedBox(width: 8),
+          const _SceneChip(),
+          const SizedBox(width: 8),
+          const _WorkspaceDirChip(),
           const Spacer(),
           Flexible(
             child: providersAsync.when(
@@ -468,6 +366,134 @@ class _TopBar extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+/// 顶栏场景 chip:显示当前激活的 Scene。无激活场景时显示"默认场景"。
+/// 纯展示(切换在右侧工作区「场景」标签页操作)。
+class _SceneChip extends ConsumerWidget {
+  const _SceneChip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final active = ref.watch(scenesProvider).activeScene;
+    final label = active.isEmpty ? '默认场景' : active;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.tune, size: 13, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 5),
+          Text(label,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        ],
+      ),
+    );
+  }
+}
+
+/// 顶栏工作目录 chip：显示当前 AI 文件沙盒路径，点击可快速修改。
+class _WorkspaceDirChip extends ConsumerWidget {
+  const _WorkspaceDirChip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final dir = ref.watch(preferencesProvider).workspaceDir;
+    final label = dir.isEmpty ? 'workspaces/' : _shortenPath(dir);
+    return Tooltip(
+      message: dir.isEmpty ? '默认工作目录 (data/workspaces/)' : dir,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => _editDir(context, ref),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color:
+                theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.folder_outlined,
+                  size: 13, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 5),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 120),
+                child: Text(label,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _editDir(BuildContext context, WidgetRef ref) async {
+    final prefs = ref.read(preferencesProvider);
+    final controller = TextEditingController(text: prefs.workspaceDir);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('工作目录'),
+        content: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  hintText: '留空使用默认',
+                  isDense: true,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.folder_open),
+              onPressed: () async {
+                final picked =
+                    await FilePicker.getDirectoryPath(dialogTitle: '选择工作目录');
+                if (picked != null) controller.text = picked;
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, ''),
+              child: const Text('恢复默认')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('保存')),
+        ],
+      ),
+    );
+    if (result != null) {
+      ref.read(preferencesProvider.notifier).setWorkspaceDir(result);
+    }
+  }
+
+  static String _shortenPath(String path) {
+    final parts = path.replaceAll('/', '\\').split('\\');
+    if (parts.length <= 2) return path;
+    return '...\\${parts[parts.length - 2]}\\${parts.last}';
   }
 }
 
@@ -607,8 +633,15 @@ class _ModelDropdown extends StatelessWidget {
 // ─── 空状态 ───────────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.session});
+  const _EmptyState({required this.session, this.textController});
   final ChatSession session;
+  final TextEditingController? textController;
+
+  static const _quickActions = [
+    (icon: Icons.travel_explore, label: '探索代码库', prompt: '帮我探索并梳理这个代码库的结构与核心模块'),
+    (icon: Icons.bug_report_outlined, label: '修复 Bug', prompt: '我遇到一个 bug,帮我定位并修复:'),
+    (icon: Icons.auto_awesome, label: '实现功能', prompt: '帮我实现一个新功能:'),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -628,7 +661,66 @@ class _EmptyState extends StatelessWidget {
             style: theme.textTheme.bodyMedium
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
+          if (hasProvider && textController != null) ...[
+            const SizedBox(height: 24),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              alignment: WrapAlignment.center,
+              children: [
+                for (final a in _quickActions)
+                  _QuickActionCard(
+                    icon: a.icon,
+                    label: a.label,
+                    onTap: () {
+                      textController!.text = a.prompt;
+                      textController!.selection = TextSelection.fromPosition(
+                        TextPosition(offset: textController!.text.length),
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _QuickActionCard extends StatelessWidget {
+  const _QuickActionCard({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          constraints: const BoxConstraints(minWidth: 120),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 22, color: theme.colorScheme.primary),
+              const SizedBox(height: 8),
+              Text(label,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -636,14 +728,55 @@ class _EmptyState extends StatelessWidget {
 
 // ─── 消息列表 ─────────────────────────────────────────────────────────────────
 
+/// 回到底部悬浮按钮(流式时附"新消息"提示)。
+class _JumpToBottomButton extends StatelessWidget {
+  const _JumpToBottomButton({required this.streaming, required this.onTap});
+
+  final bool streaming;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      elevation: 3,
+      borderRadius: BorderRadius.circular(20),
+      color: theme.colorScheme.secondaryContainer,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.arrow_downward_rounded,
+                  size: 16, color: theme.colorScheme.onSecondaryContainer),
+              const SizedBox(width: 6),
+              Text(
+                streaming ? '新消息' : '回到底部',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSecondaryContainer,
+                    fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _MessageList extends StatelessWidget {
   const _MessageList({
+    required this.sessionId,
     required this.messages,
     required this.isStreaming,
     required this.scrollController,
     required this.cursorController,
   });
 
+  final String sessionId;
   final List<ChatMessage> messages;
   final bool isStreaming;
   final ScrollController scrollController;
@@ -660,8 +793,10 @@ class _MessageList extends StatelessWidget {
         final isLast = index == messages.length - 1;
         final showCursor = isStreaming && isLast && msg.role == 'assistant';
         return _MessageBubble(
+          sessionId: sessionId,
           message: msg,
           showCursor: showCursor,
+          streaming: isStreaming,
           cursorController: cursorController,
         );
       },
@@ -671,23 +806,84 @@ class _MessageList extends StatelessWidget {
 
 // ─── 单条消息气泡 ─────────────────────────────────────────────────────────────
 
-class _MessageBubble extends StatelessWidget {
+class _MessageBubble extends ConsumerStatefulWidget {
   const _MessageBubble({
+    required this.sessionId,
     required this.message,
     required this.showCursor,
+    required this.streaming,
     required this.cursorController,
   });
 
+  final String sessionId;
   final ChatMessage message;
   final bool showCursor;
+  final bool streaming;
   final AnimationController cursorController;
+
+  @override
+  ConsumerState<_MessageBubble> createState() => _MessageBubbleState();
+}
+
+class _MessageBubbleState extends ConsumerState<_MessageBubble> {
+  bool _hovered = false;
+
+  ChatMessage get message => widget.message;
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: message.content));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已复制'), duration: Duration(seconds: 1)),
+      );
+    }
+  }
+
+  void _regenerate() {
+    ref.read(chatProvider(widget.sessionId).notifier).regenerate(message.id);
+  }
+
+  Future<void> _edit() async {
+    final controller = TextEditingController(text: message.content);
+    final newText = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('编辑并重发'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: null,
+          decoration: const InputDecoration(hintText: '修改后重新发送'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('重发')),
+        ],
+      ),
+    );
+    if (newText != null && newText.isNotEmpty) {
+      ref
+          .read(chatProvider(widget.sessionId).notifier)
+          .editAndResend(message.id, newText);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isUser = message.role == 'user';
+    final showCursor = widget.showCursor;
+    final cursorController = widget.cursorController;
+    // 操作条:hover 时显示;流式进行中的最后一条不显示(避免误操作)。
+    final showActions = _hovered && !showCursor && message.content.trim().isNotEmpty;
 
-    return Padding(
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         mainAxisAlignment:
@@ -727,7 +923,7 @@ class _MessageBubble extends StatelessWidget {
                             .withValues(alpha: 0.48),
                     border: isUser
                         ? null
-                        : Border.all(color: GlassTokens.borderIdle),
+                        : Border.all(color: GlassTokens.borderIdleOf(context)),
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(18),
                       topRight: const Radius.circular(18),
@@ -754,6 +950,38 @@ class _MessageBubble extends StatelessWidget {
                   ...message.steps.whereType<AskUserStep>().take(1).map(
                         (s) => _AskUserOptions(step: s),
                       ),
+                // 消息级操作条(hover 显示):复制 / 重新生成(助手) / 编辑重发(用户)
+                if (showActions)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      mainAxisAlignment:
+                          isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+                      children: [
+                        _MsgActionButton(
+                            icon: Icons.copy_rounded,
+                            tooltip: '复制',
+                            onTap: _copy),
+                        if (!isUser && !widget.streaming)
+                          _MsgActionButton(
+                              icon: Icons.refresh_rounded,
+                              tooltip: '重新生成',
+                              onTap: _regenerate),
+                        if (isUser && !widget.streaming)
+                          _MsgActionButton(
+                              icon: Icons.edit_outlined,
+                              tooltip: '编辑重发',
+                              onTap: _edit),
+                        if (isUser && !widget.streaming)
+                          _MsgActionButton(
+                              icon: Icons.undo_rounded,
+                              tooltip: '撤回',
+                              onTap: () => ref
+                                  .read(chatProvider(widget.sessionId).notifier)
+                                  .undoLastRound()),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -767,6 +995,34 @@ class _MessageBubble extends StatelessWidget {
             ),
           ],
         ],
+      ),
+      ),
+    );
+  }
+}
+
+/// 消息级操作小按钮。
+class _MsgActionButton extends StatelessWidget {
+  const _MsgActionButton(
+      {required this.icon, required this.tooltip, required this.onTap});
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Icon(icon,
+              size: 15, color: theme.colorScheme.onSurfaceVariant),
+        ),
       ),
     );
   }
@@ -808,6 +1064,43 @@ class _AskUserOptions extends ConsumerWidget {
 
 // ─── 执行步骤面板 ─────────────────────────────────────────────────────────────
 
+/// 工具调用状态(从 result 派生)。
+enum _ToolStatus { pending, success, error }
+
+_ToolStatus _toolStatus(ToolCallStep s) {
+  if (s.result == null) return _ToolStatus.pending;
+  final r = s.result!.toLowerCase();
+  if (r.contains('"status":"error"') ||
+      r.contains('"error"') ||
+      r.contains('error:') ||
+      r.contains('failed') ||
+      r.contains('exception')) {
+    return _ToolStatus.error;
+  }
+  return _ToolStatus.success;
+}
+
+/// 工具状态对应的语义色(取 theme)。
+({Color fg, Color bg}) _toolStatusColors(_ToolStatus st, ThemeData theme) {
+  switch (st) {
+    case _ToolStatus.pending:
+      return (
+        fg: theme.colorScheme.onSurfaceVariant,
+        bg: theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.4),
+      );
+    case _ToolStatus.success:
+      return (
+        fg: theme.colorScheme.primary,
+        bg: theme.colorScheme.primaryContainer.withValues(alpha: 0.22),
+      );
+    case _ToolStatus.error:
+      return (
+        fg: theme.colorScheme.error,
+        bg: theme.colorScheme.errorContainer.withValues(alpha: 0.28),
+      );
+  }
+}
+
 class _ExecutionStepsPanel extends StatefulWidget {
   const _ExecutionStepsPanel({required this.steps, this.forceExpanded = false});
   final List<ExecutionStep> steps;
@@ -838,7 +1131,7 @@ class _ExecutionStepsPanelState extends State<_ExecutionStepsPanel> {
       constraints: const BoxConstraints(maxWidth: 520),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.42),
-        border: Border.all(color: GlassTokens.borderIdle),
+        border: Border.all(color: GlassTokens.borderIdleOf(context)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -883,12 +1176,124 @@ class _ExecutionStepsPanelState extends State<_ExecutionStepsPanel> {
               padding: const EdgeInsets.all(10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final step in widget.steps) _StepItem(step: step),
-                ],
+                children: _buildGroupedSteps(widget.steps),
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// 把连续的同名 tool_call 合并为分组(≥2 个才合并),其余原样渲染。
+List<Widget> _buildGroupedSteps(List<ExecutionStep> steps) {
+  final widgets = <Widget>[];
+  var i = 0;
+  while (i < steps.length) {
+    final step = steps[i];
+    if (step is ToolCallStep) {
+      // 收集连续同名 tool call。
+      var j = i + 1;
+      while (j < steps.length &&
+          steps[j] is ToolCallStep &&
+          (steps[j] as ToolCallStep).name == step.name) {
+        j++;
+      }
+      final run = steps.sublist(i, j).cast<ToolCallStep>();
+      if (run.length >= 2) {
+        widgets.add(_ToolGroupItem(name: step.name, calls: run));
+        i = j;
+        continue;
+      }
+    }
+    widgets.add(_StepItem(step: step));
+    i++;
+  }
+  return widgets;
+}
+
+/// 连续同名工具调用的折叠分组(默认折叠显示"name ×N",展开看每条)。
+class _ToolGroupItem extends StatefulWidget {
+  const _ToolGroupItem({required this.name, required this.calls});
+  final String name;
+  final List<ToolCallStep> calls;
+
+  @override
+  State<_ToolGroupItem> createState() => _ToolGroupItemState();
+}
+
+class _ToolGroupItemState extends State<_ToolGroupItem> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // 分组聚合状态:有 error→error;有 pending→pending;否则 success。
+    final statuses = widget.calls.map(_toolStatus).toList();
+    final agg = statuses.contains(_ToolStatus.error)
+        ? _ToolStatus.error
+        : statuses.contains(_ToolStatus.pending)
+            ? _ToolStatus.pending
+            : _ToolStatus.success;
+    final c = _toolStatusColors(agg, theme);
+    final label = widget.name.isEmpty ? 'Tool call' : widget.name;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: c.bg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: [
+                  if (agg == _ToolStatus.pending)
+                    SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 1.5, color: c.fg),
+                    )
+                  else
+                    Icon(
+                      agg == _ToolStatus.error
+                          ? Icons.error_outline
+                          : Icons.check_circle_outline,
+                      size: 13,
+                      color: c.fg,
+                    ),
+                  const SizedBox(width: 6),
+                  Text('$label ×${widget.calls.length}',
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: c.fg)),
+                  const Spacer(),
+                  Icon(_expanded ? Icons.expand_less : Icons.expand_more,
+                      size: 15, color: c.fg),
+                ],
+              ),
+            ),
+          ),
+          if (_expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final call in widget.calls)
+                    _StepItem(step: call),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -937,7 +1342,19 @@ class _StepItem extends ConsumerWidget {
         ),
       ),
       toolCall: (s) {
+        // 专属气泡优先：命中注册表则用领域化富展示；未命中走下方通用渲染。
+        final bubbleBuilder = bubbleBuilderFor(s.name);
+        if (bubbleBuilder != null) {
+          return bubbleBuilder(s);
+        }
         final artifact = Artifact.fromToolCall(s);
+        final st = _toolStatus(s);
+        final statusColor = _toolStatusColors(st, theme).fg;
+        final statusIcon = st == _ToolStatus.error
+            ? Icons.error_outline
+            : st == _ToolStatus.success
+                ? Icons.check_circle_outline
+                : Icons.build_outlined;
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Column(
@@ -945,15 +1362,14 @@ class _StepItem extends ConsumerWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.build_outlined,
-                      size: 12, color: theme.colorScheme.secondary),
+                  Icon(statusIcon, size: 12, color: statusColor),
                   const SizedBox(width: 4),
                   Text(
                     s.name.isEmpty ? 'Tool call' : s.name,
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.secondary,
+                      color: statusColor,
                     ),
                   ),
                   if (artifact != null) ...[
@@ -988,7 +1404,7 @@ class _StepItem extends ConsumerWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: GlassTokens.innerTileFill,
+                  color: GlassTokens.innerTileFillOf(context),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -1124,7 +1540,7 @@ class _AssistantContent extends StatelessWidget {
                   ?.copyWith(color: theme.colorScheme.onSurface),
               code: theme.textTheme.bodySmall?.copyWith(
                 fontFamily: 'monospace',
-                backgroundColor: GlassTokens.innerTileFill,
+                backgroundColor: GlassTokens.innerTileFillOf(context),
               ),
             ),
             selectable: true,
@@ -1140,7 +1556,7 @@ class _AssistantContent extends StatelessWidget {
             ?.copyWith(color: theme.colorScheme.onSurface),
         code: theme.textTheme.bodySmall?.copyWith(
           fontFamily: 'monospace',
-          backgroundColor: GlassTokens.innerTileFill,
+          backgroundColor: GlassTokens.innerTileFillOf(context),
         ),
       ),
       selectable: true,
@@ -1171,10 +1587,239 @@ class _NoProviderState extends StatelessWidget {
 
 // ─── 底部输入栏 ───────────────────────────────────────────────────────────────
 
-/// 可用的斜杠指令(输入 / 时弹出)。
+/// 可用的斜杠指令(输入 / 时弹出)。usage 给参数提示。
 const _slashCommands = [
-  (cmd: '/team', desc: '强制组建多 agent 团队完成复杂任务'),
+  (
+    cmd: '/team',
+    desc: '强制组建多 agent 团队完成复杂任务',
+    usage: '/team <任务描述>',
+  ),
 ];
+
+typedef _SlashCmd = ({String cmd, String desc, String usage});
+
+// ─── 工具自动选择芯片条 ────────────────────────────────────────────────────────
+
+class _ToolSelectorChips extends ConsumerWidget {
+  const _ToolSelectorChips({required this.sessionId});
+
+  final String sessionId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectorState = ref.watch(toolSelectorProvider(sessionId));
+    final session = ref.watch(chatProvider(sessionId));
+    final theme = Theme.of(context);
+    final isInjected = selectorState.active.isNotEmpty && session.isStreaming;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── 控制行：始终可见 ──
+          Row(
+            children: [
+              // 主按钮：手动触发 / 显示状态
+              _SelectorButton(sessionId: sessionId),
+              const SizedBox(width: 8),
+              if (selectorState.loading)
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              if (!selectorState.loading && selectorState.active.isNotEmpty)
+                Text(
+                  isInjected ? '✓ 已注入 ${selectorState.active.length} 个工具' : '${selectorState.active.length} 个工具已选',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: isInjected
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
+          // ── 芯片展示区：有结果时展示 ──
+          if (selectorState.matches.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                for (final match in selectorState.active)
+                  InputChip(
+                    label: Text(
+                      '${match.name} ${(match.score * 100).toStringAsFixed(0)}%',
+                      style: theme.textTheme.labelSmall,
+                    ),
+                    avatar: Icon(_toolIcon(match.id), size: 14),
+                    deleteIcon: const Icon(Icons.close, size: 14),
+                    onDeleted: () => ref
+                        .read(toolSelectorProvider(sessionId).notifier)
+                        .deselect(match.id),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                // Deselected: faded, tappable to re-add
+                for (final match in selectorState.matches
+                    .where((m) => selectorState.deselected.contains(m.id)))
+                  ActionChip(
+                    label: Text(
+                      match.name,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    onPressed: () => ref
+                        .read(toolSelectorProvider(sessionId).notifier)
+                        .reselect(match.id),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  IconData _toolIcon(String toolId) {
+    return switch (toolId) {
+      'web_search' => Icons.search,
+      'file_read' || 'file_write' => Icons.description,
+      'shell_exec' || 'run_command' => Icons.terminal,
+      'image_gen' => Icons.image,
+      'calculator' => Icons.calculate,
+      'translate' => Icons.translate,
+      'code_run' || 'python_exec' => Icons.code,
+      'todoist' || 'todo' => Icons.checklist,
+      _ => Icons.build_circle_outlined,
+    };
+  }
+}
+
+/// 工具选择主按钮：
+/// - 点击：手动触发 selector
+/// - 旁边小三角展开菜单：切换自动/关闭
+class _SelectorButton extends ConsumerWidget {
+  const _SelectorButton({required this.sessionId});
+
+  final String sessionId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(toolSelectorProvider(sessionId));
+    final theme = Theme.of(context);
+
+    final isActive = state.autoSelect;
+    final Color color = isActive
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
+
+    return Container(
+      height: 28,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: color.withValues(alpha: 0.3),
+          width: 1,
+        ),
+        color: isActive
+            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
+            : Colors.transparent,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 主按钮区域
+          InkWell(
+            borderRadius: const BorderRadius.horizontal(left: Radius.circular(14)),
+            onTap: () {
+              final text = ref.read(inputTextProvider(sessionId));
+              if (text.trim().isNotEmpty) {
+                ref.read(toolSelectorProvider(sessionId).notifier)
+                    .manualSelect(text);
+              }
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.auto_awesome, size: 14, color: color),
+                  const SizedBox(width: 4),
+                  Text(
+                    '工具',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: color,
+                      fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // 分隔线 + 下拉箭头
+          Container(width: 1, height: 16, color: color.withValues(alpha: 0.2)),
+          PopupMenuButton<String>(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            position: PopupMenuPosition.over,
+            icon: Icon(Icons.expand_less, size: 14, color: color),
+            tooltip: '',
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'toggle_auto',
+                height: 36,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isActive ? Icons.toggle_on : Icons.toggle_off,
+                      size: 20,
+                      color: isActive ? theme.colorScheme.primary : null,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(isActive ? '自动选择：开' : '自动选择：关',
+                        style: theme.textTheme.bodySmall),
+                  ],
+                ),
+              ),
+              if (state.matches.isNotEmpty)
+                PopupMenuItem(
+                  value: 'clear',
+                  height: 36,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.clear_all, size: 20),
+                      const SizedBox(width: 8),
+                      Text('清除选择', style: theme.textTheme.bodySmall),
+                    ],
+                  ),
+                ),
+            ],
+            onSelected: (value) {
+              switch (value) {
+                case 'toggle_auto':
+                  ref.read(toolSelectorProvider(sessionId).notifier)
+                      .toggleAutoSelect();
+                case 'clear':
+                  ref.read(toolSelectorProvider(sessionId).notifier).clear();
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _InputBar extends StatefulWidget {
   const _InputBar({
@@ -1183,6 +1828,7 @@ class _InputBar extends StatefulWidget {
     required this.onSend,
     required this.onStop,
     this.lastUserMessage,
+    this.fileNames = const [],
     this.disabledHint,
   });
 
@@ -1193,6 +1839,9 @@ class _InputBar extends StatefulWidget {
 
   /// 最近一条用户消息(输入框为空时按 ↑ 调出重新编辑)。
   final String? lastUserMessage;
+
+  /// 本会话产出的文件名(供 @ 引用菜单)。
+  final List<String> fileNames;
 
   /// When set, the composer is disabled and this hint explains why
   /// (e.g. no provider configured yet).
@@ -1223,16 +1872,33 @@ class _InputBarState extends State<_InputBar> {
     if (mounted) setState(() {});
   }
 
-  /// 当前是否应显示斜杠菜单 + 匹配的指令。
-  List<({String cmd, String desc})> get _matchingSlash {
+  /// 当前是否应显示斜杠菜单 + 匹配的指令(前缀优先,其次子串模糊匹配)。
+  List<_SlashCmd> get _matchingSlash {
     final text = widget.controller.text;
     if (!text.startsWith('/')) return const [];
     // 仅当还在输入指令本身(没有空格)时显示;输入了参数就收起。
     if (text.contains(' ') || text.contains('\n')) return const [];
     final q = text.toLowerCase();
+    final prefix = _slashCommands.where((c) => c.cmd.startsWith(q)).toList();
+    if (prefix.isNotEmpty) return prefix;
+    // 模糊:指令名或描述含查询(去掉前导 /)。
+    final qq = q.replaceFirst('/', '');
     return _slashCommands
-        .where((c) => c.cmd.startsWith(q))
+        .where((c) =>
+            c.cmd.contains(qq) || c.desc.toLowerCase().contains(qq))
         .toList();
+  }
+
+  /// 灰色 ghost-text:正在输入指令前缀时,补全到第一个匹配指令的剩余部分。
+  String get _ghostSuffix {
+    final text = widget.controller.text;
+    final m = _matchingSlash;
+    if (m.isEmpty) return '';
+    final top = m.first.cmd;
+    if (top.startsWith(text) && top.length > text.length) {
+      return top.substring(text.length);
+    }
+    return '';
   }
 
   void _applySlash(String cmd) {
@@ -1240,6 +1906,50 @@ class _InputBarState extends State<_InputBar> {
     widget.controller.selection = TextSelection.collapsed(
       offset: widget.controller.text.length,
     );
+    _focusNode.requestFocus();
+  }
+
+  /// 光标前正在输入的 @词(无空格);非 @ 上下文返回 null。
+  String? get _atQuery {
+    final sel = widget.controller.selection;
+    final text = widget.controller.text;
+    final caret = sel.baseOffset < 0 ? text.length : sel.baseOffset;
+    final before = text.substring(0, caret);
+    final at = before.lastIndexOf('@');
+    if (at < 0) return null;
+    final token = before.substring(at + 1);
+    if (token.contains(' ') || token.contains('\n')) return null;
+    // @ 前若是字母数字(如 email),不当作引用。
+    if (at > 0) {
+      final prev = before[at - 1];
+      if (RegExp(r'[A-Za-z0-9]').hasMatch(prev)) return null;
+    }
+    return token;
+  }
+
+  /// 匹配的文件名(@ 引用菜单)。
+  List<String> get _matchingFiles {
+    final q = _atQuery;
+    if (q == null || widget.fileNames.isEmpty) return const [];
+    final ql = q.toLowerCase();
+    final seen = <String>{};
+    return widget.fileNames
+        .where((n) => seen.add(n) && (ql.isEmpty || n.toLowerCase().contains(ql)))
+        .take(6)
+        .toList();
+  }
+
+  void _applyFile(String name) {
+    final text = widget.controller.text;
+    final sel = widget.controller.selection;
+    final caret = sel.baseOffset < 0 ? text.length : sel.baseOffset;
+    final before = text.substring(0, caret);
+    final at = before.lastIndexOf('@');
+    if (at < 0) return;
+    final newText = '${text.substring(0, at)}@$name ${text.substring(caret)}';
+    widget.controller.text = newText;
+    final newCaret = at + name.length + 2;
+    widget.controller.selection = TextSelection.collapsed(offset: newCaret);
     _focusNode.requestFocus();
   }
 
@@ -1252,6 +1962,17 @@ class _InputBarState extends State<_InputBar> {
 
     // 斜杠菜单可见时,Enter 选中唯一/第一个指令。
     if (slash.isNotEmpty && isEnter && !shift) {
+      _applySlash(slash.first.cmd);
+      return KeyEventResult.handled;
+    }
+    // @ 文件菜单可见时,Enter 选中第一个文件。
+    final files = _matchingFiles;
+    if (files.isNotEmpty && isEnter && !shift) {
+      _applyFile(files.first);
+      return KeyEventResult.handled;
+    }
+    // Tab 接受 ghost-text 补全(补全到完整指令名)。
+    if (event.logicalKey == LogicalKeyboardKey.tab && _ghostSuffix.isNotEmpty) {
       _applySlash(slash.first.cmd);
       return KeyEventResult.handled;
     }
@@ -1278,41 +1999,108 @@ class _InputBarState extends State<_InputBar> {
     final theme = Theme.of(context);
     final disabled = widget.disabledHint != null;
     final inputDisabled = widget.isStreaming || disabled;
-    final slash = inputDisabled ? const <({String cmd, String desc})>[] : _matchingSlash;
+    final slash = inputDisabled ? const <_SlashCmd>[] : _matchingSlash;
+    // 指令模式:输入以 / 开头(给 composer 边框换强调色,提示回车会执行指令)。
+    final commandMode = !inputDisabled && widget.controller.text.startsWith('/');
+    final accent = theme.colorScheme.primary;
+    final ghost = inputDisabled ? '' : _ghostSuffix;
 
     return Padding(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (slash.isNotEmpty) _SlashMenu(items: slash, onPick: _applySlash),
-          Row(
+          if (slash.isEmpty && !inputDisabled && _matchingFiles.isNotEmpty)
+            _FileMentionMenu(files: _matchingFiles, onPick: _applyFile),
+          // 浮起的输入框:圆角 + surfaceContainerHigh + 轻阴影,脱离底边。
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Row(
             children: [
               Expanded(
                 child: Focus(
                   focusNode: _focusNode,
                   onKeyEvent: inputDisabled ? null : _handleKey,
-                  child: TextField(
-                    controller: widget.controller,
-                    enabled: !inputDisabled,
-                    maxLines: null,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.newline,
-                    decoration: InputDecoration(
-                      hintText: disabled
-                          ? widget.disabledHint
-                          : widget.isStreaming
-                              ? 'Generating…'
-                              : '输入消息…  Enter 发送 · Shift+Enter 换行 · / 指令',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: theme.colorScheme.outline),
+                  child: Stack(
+                    children: [
+                      // 灰色 ghost-text 补全(对齐输入文字,垫在 TextField 下层)。
+                      if (ghost.isNotEmpty)
+                        Positioned.fill(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            child: Text.rich(
+                              TextSpan(children: [
+                                TextSpan(
+                                    text: widget.controller.text,
+                                    style: const TextStyle(
+                                        color: Colors.transparent)),
+                                TextSpan(
+                                    text: ghost,
+                                    style: TextStyle(
+                                        color: theme
+                                            .colorScheme.onSurfaceVariant
+                                            .withValues(alpha: 0.5))),
+                              ]),
+                            ),
+                          ),
+                        ),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border(
+                            left: BorderSide(
+                              color: commandMode ? accent : Colors.transparent,
+                              width: 3,
+                            ),
+                          ),
+                        ),
+                        child: TextField(
+                          controller: widget.controller,
+                          enabled: !inputDisabled,
+                          maxLines: null,
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.newline,
+                          decoration: InputDecoration(
+                            hintText: disabled
+                                ? widget.disabledHint
+                                : widget.isStreaming
+                                    ? 'Generating…'
+                                    : '输入消息…  Enter 发送 · / 指令 · @ 引用文件',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  BorderSide(color: theme.colorScheme.outline),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                  color: commandMode
+                                      ? accent
+                                      : theme.colorScheme.outline),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            isDense: true,
+                          ),
+                        ),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      isDense: true,
-                    ),
+                    ],
                   ),
                 ),
               ),
@@ -1335,6 +2123,8 @@ class _InputBarState extends State<_InputBar> {
                 ),
             ],
           ),
+            ),
+          ),
         ],
       ),
     );
@@ -1342,10 +2132,61 @@ class _InputBarState extends State<_InputBar> {
 }
 
 /// 斜杠指令弹出菜单(输入框上方)。
+/// @ 文件引用弹出菜单(输入框上方)。
+class _FileMentionMenu extends StatelessWidget {
+  const _FileMentionMenu({required this.files, required this.onPick});
+
+  final List<String> files;
+  final void Function(String name) onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final f in files)
+            InkWell(
+              onTap: () => onPick(f),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  children: [
+                    Icon(Icons.insert_drive_file_outlined,
+                        size: 16, color: theme.colorScheme.primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(f,
+                          style: theme.textTheme.bodyMedium
+                              ?.copyWith(fontFamily: 'monospace'),
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    Text('引用',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SlashMenu extends StatelessWidget {
   const _SlashMenu({required this.items, required this.onPick});
 
-  final List<({String cmd, String desc})> items;
+  final List<_SlashCmd> items;
   final void Function(String cmd) onPick;
 
   @override

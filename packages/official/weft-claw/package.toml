@@ -41,6 +41,10 @@ capabilities = [
 default_enabled = []
 optional = []
 
+[permissions]
+process = true
+network = true
+
 [bindings."weft_claw.turn"]
 provider = "weft-claw"
 mutable = false

@@ -80,17 +80,58 @@ class ShotLibraryPanel extends ConsumerWidget {
     Shot shot,
   ) {
     final nodes = shot.nodeIds.map((id) => state.nodes[id]).whereType<CanvasNode>().toList();
-    return _Group(
-      title: shot.title,
-      count: nodes.length,
-      child: Wrap(
-        spacing: Spacing.xs,
-        runSpacing: Spacing.xs,
-        children: nodes
-            .map((n) => _thumb(theme, n, selected: state.selectedNodeId == n.id, onTap: () => notifier.select(n.id)))
-            .toList(),
+    return DragTarget<String>(
+      onAcceptWithDetails: (details) => notifier.moveNodeToShot(details.data, shot.id),
+      builder: (context, candidate, _) {
+        final highlight = candidate.isNotEmpty;
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: highlight
+                ? theme.colorScheme.primary.withValues(alpha: 0.08)
+                : Colors.transparent,
+          ),
+          child: _Group(
+            title: shot.title,
+            count: nodes.length,
+            onRename: () => _renameShot(context, ref, shot),
+            onDelete: () => notifier.removeShot(shot.id),
+            child: Wrap(
+              spacing: Spacing.xs,
+              runSpacing: Spacing.xs,
+              children: nodes
+                  .map((n) => _thumb(theme, n, selected: state.selectedNodeId == n.id, onTap: () => notifier.select(n.id)))
+                  .toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _renameShot(BuildContext context, WidgetRef ref, Shot shot) async {
+    final controller = TextEditingController(text: shot.title);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('重命名分镜'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('确定'),
+          ),
+        ],
       ),
     );
+    if (name != null && name.trim().isNotEmpty) {
+      ref.read(canvasProvider.notifier).renameShot(shot.id, name.trim());
+    }
   }
 
   Widget _looseGroup(
@@ -100,16 +141,30 @@ class ShotLibraryPanel extends ConsumerWidget {
     CanvasNotifier notifier,
     List<CanvasNode> nodes,
   ) {
-    return _Group(
-      title: '未分组',
-      count: nodes.length,
-      child: Wrap(
-        spacing: Spacing.xs,
-        runSpacing: Spacing.xs,
-        children: nodes
-            .map((n) => _thumb(theme, n, selected: false, onTap: () => notifier.select(n.id)))
-            .toList(),
-      ),
+    return DragTarget<String>(
+      onAcceptWithDetails: (details) => notifier.moveNodeToShot(details.data, null),
+      builder: (context, candidate, _) {
+        final highlight = candidate.isNotEmpty;
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: highlight
+                ? theme.colorScheme.primary.withValues(alpha: 0.08)
+                : Colors.transparent,
+          ),
+          child: _Group(
+            title: '未分组',
+            count: nodes.length,
+            child: Wrap(
+              spacing: Spacing.xs,
+              runSpacing: Spacing.xs,
+              children: nodes
+                  .map((n) => _thumb(theme, n, selected: false, onTap: () => notifier.select(n.id)))
+                  .toList(),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -123,7 +178,7 @@ class ShotLibraryPanel extends ConsumerWidget {
       CanvasNodeKind.music => Icons.music_note_outlined,
       CanvasNodeKind.text => Icons.notes_outlined,
     };
-    return GestureDetector(
+    final tile = GestureDetector(
       onTap: onTap,
       child: Container(
         width: 72,
@@ -142,14 +197,29 @@ class ShotLibraryPanel extends ConsumerWidget {
             : Center(child: Icon(icon, size: 24, color: theme.colorScheme.onSurfaceVariant)),
       ),
     );
+    // 可拖拽到别的 Shot 分组归类。
+    return Draggable<String>(
+      data: node.id,
+      feedback: Opacity(opacity: 0.8, child: tile),
+      childWhenDragging: Opacity(opacity: 0.3, child: tile),
+      child: tile,
+    );
   }
 }
 
 class _Group extends StatelessWidget {
-  const _Group({required this.title, required this.count, required this.child});
+  const _Group({
+    required this.title,
+    required this.count,
+    required this.child,
+    this.onRename,
+    this.onDelete,
+  });
   final String title;
   final int count;
   final Widget child;
+  final VoidCallback? onRename;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -166,6 +236,24 @@ class _Group extends StatelessWidget {
                 Text(title, style: theme.textTheme.labelMedium),
                 const SizedBox(width: Spacing.xs),
                 Text('$count', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                if (onRename != null || onDelete != null) ...[
+                  const Spacer(),
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_horiz, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                    padding: EdgeInsets.zero,
+                    iconSize: 16,
+                    onSelected: (v) {
+                      if (v == 'rename') onRename?.call();
+                      if (v == 'delete') onDelete?.call();
+                    },
+                    itemBuilder: (_) => [
+                      if (onRename != null)
+                        const PopupMenuItem(value: 'rename', child: Text('重命名')),
+                      if (onDelete != null)
+                        const PopupMenuItem(value: 'delete', child: Text('删除分镜')),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

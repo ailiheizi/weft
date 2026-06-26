@@ -1,0 +1,126 @@
+{
+  "presets": [
+    {
+      "id": "filesystem",
+      "name": "文件系统",
+      "category": "文件",
+      "description": "读写本地文件、列目录、搜索文件",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "${WORKSPACE}"],
+      "transport": "stdio",
+      "needs_node": true,
+      "needs_key": false,
+      "note": "${WORKSPACE} 会替换为当前工作目录；可手动改成任意允许访问的路径"
+    },
+    {
+      "id": "git",
+      "name": "Git 版本控制",
+      "category": "开发",
+      "description": "查看状态/diff/log、提交、分支管理",
+      "command": "uvx",
+      "args": ["mcp-server-git", "--repository", "${WORKSPACE}"],
+      "transport": "stdio",
+      "needs_node": false,
+      "needs_key": false,
+      "note": "需要 uv (uvx)；${WORKSPACE} 替换为仓库路径"
+    },
+    {
+      "id": "fetch",
+      "name": "网页抓取",
+      "category": "网络",
+      "description": "抓取 URL 内容并转为 markdown",
+      "command": "uvx",
+      "args": ["mcp-server-fetch"],
+      "transport": "stdio",
+      "needs_node": false,
+      "needs_key": false,
+      "note": "需要 uv (uvx)"
+    },
+    {
+      "id": "memory",
+      "name": "知识图谱记忆",
+      "category": "记忆",
+      "description": "基于知识图谱的长期记忆（实体/关系/观察）",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "transport": "stdio",
+      "needs_node": true,
+      "needs_key": false,
+      "note": "记忆存储在本地 JSON 文件"
+    },
+    {
+      "id": "sequential-thinking",
+      "name": "顺序推理",
+      "category": "推理",
+      "description": "分步推理链，复杂问题拆解",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "transport": "stdio",
+      "needs_node": true,
+      "needs_key": false,
+      "note": "帮助 AI 做结构化分步思考"
+    },
+    {
+      "id": "sqlite",
+      "name": "SQLite 数据库",
+      "category": "数据库",
+      "description": "查询/操作 SQLite 数据库",
+      "command": "uvx",
+      "args": ["mcp-server-sqlite", "--db-path", "${WORKSPACE}/data.db"],
+      "transport": "stdio",
+      "needs_node": false,
+      "needs_key": false,
+      "note": "需要 uv (uvx)；指定 .db 文件路径"
+    },
+    {
+      "id": "context7",
+      "name": "Context7 文档查询",
+      "category": "开发",
+      "description": "查询库/框架的最新官方文档和代码示例",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "transport": "stdio",
+      "needs_node": true,
+      "needs_key": false,
+      "note": "查询第三方库文档，避免过时 API"
+    },
+    {
+      "id": "tavily",
+      "name": "Tavily 网络搜索",
+      "category": "网络",
+      "description": "高质量网络搜索 + 网页内容提取",
+      "command": "npx",
+      "args": ["-y", "tavily-mcp"],
+      "env": {"TAVILY_API_KEY": "${TAVILY_API_KEY}"},
+      "transport": "stdio",
+      "needs_node": true,
+      "needs_key": true,
+      "key_env": "TAVILY_API_KEY",
+      "note": "需要在 tavily.com 申请 API key"
+    },
+    {
+      "id": "playwright",
+      "name": "Playwright 浏览器",
+      "category": "网络",
+      "description": "浏览器自动化：导航/点击/填表/截图",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "transport": "stdio",
+      "needs_node": true,
+      "needs_key": false,
+      "note": "首次运行会下载浏览器内核"
+    },
+    {
+      "id": "firecrawl",
+      "name": "Firecrawl 网页抓取",
+      "category": "网络",
+      "description": "高级网页抓取/搜索：JS 渲染、结构化提取、爬取",
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "transport": "stdio",
+      "needs_node": true,
+      "needs_key": false,
+      "note": "免 key 模式下 firecrawl_scrape / firecrawl_search 直接可用（按 IP 限流，走 Firecrawl 云端）；crawl/extract 等其余工具需 FIRECRAWL_API_KEY（firecrawl.dev 免费申请）。自托管可设 FIRECRAWL_API_URL。"
+    }
+  ]
+}

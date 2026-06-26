@@ -9,6 +9,7 @@ import '../../core/providers/core_repository.dart';
 import '../../core/providers/data_providers.dart';
 import '../../main.dart' show navigatorKey;
 import 'glass_card.dart';
+import 'shortcuts_cheat_sheet.dart';
 
 /// 单条命令。
 class _Command {
@@ -105,6 +106,17 @@ class _CommandPaletteState extends ConsumerState<CommandPalette> {
           group: 'Navigation',
           onRun: (_, _) => goTo(n.path),
         ),
+      _Command(
+        id: 'help:shortcuts',
+        label: '键盘快捷键',
+        icon: Icons.keyboard_outlined,
+        group: 'Help',
+        keywords: 'shortcuts hotkeys keybindings 快捷键',
+        onRun: (_, _) {
+          final ctx = navigatorKey.currentContext;
+          if (ctx != null) ShortcutsCheatSheet.show(ctx);
+        },
+      ),
     ];
     final apps = ref.read(appsProvider).asData?.value ?? const <ResolvedApp>[];
     for (final a in apps) {
@@ -379,9 +391,9 @@ class _KeyHint extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: GlassTokens.innerTileFill,
+        color: GlassTokens.innerTileFillOf(context),
         borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: GlassTokens.borderIdle),
+        border: Border.all(color: GlassTokens.borderIdleOf(context)),
       ),
       child: Text(label,
           style: theme.textTheme.labelSmall?.copyWith(

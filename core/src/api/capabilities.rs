@@ -6,6 +6,66 @@ use axum::http::StatusCode;
 use axum::Json;
 use std::path::{Path as FsPath, PathBuf};
 
+/// 下载远程图片到 ./workspace/image-gen/ 并返回绝对路径（剥掉 \\?\ 前缀，
+/// 与 image-gen 本地保存格式一致，前端 mediaUrl 可解析为 /media URL）。
+/// 失败返回 None（调用方回退到原始 url）。
+async fn download_image_to_workspace(url: &str) -> Option<String> {
+    // 用 native-tls(Windows schannel)而非默认 rustls：rustls 的 HTTP/2 帧解析
+    // 与部分 CDN(storage.fonedis.cc) 不兼容,下载大二进制报 "error decoding response body"。
+    // schannel 与 curl 行为一致,可正常下载。
+    let client = match reqwest::Client::builder()
+        .use_native_tls()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("image download client build failed: {e}");
+            return None;
+        }
+    };
+    let resp = match client.get(url).send().await {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!("image download failed (send): {e}");
+            return None;
+        }
+    };
+    let bytes = match resp.bytes().await {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::warn!("image download failed (bytes): {e}");
+            return None;
+        }
+    };
+    tracing::info!("image downloaded: {} bytes from {}", bytes.len(), &url[..url.len().min(60)]);
+    // 从 url 推断扩展名，默认 png
+    let ext = url
+        .split('?')
+        .next()
+        .and_then(|u| u.rsplit('.').next())
+        .filter(|e| matches!(e.to_lowercase().as_str(), "png" | "jpg" | "jpeg" | "webp" | "gif"))
+        .unwrap_or("png")
+        .to_string();
+    let dir = std::path::Path::new("./workspace/image-gen");
+    let _ = std::fs::create_dir_all(dir);
+    // 用内容哈希 + 时间避免重名（不用 rng，用 bytes 长度 + 纳秒）
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let fname = format!("dl-{}-{}.{}", bytes.len(), stamp, ext);
+    let full = dir.join(&fname);
+    std::fs::write(&full, &bytes).ok()?;
+    let abs = std::fs::canonicalize(&full)
+        .map(|p| {
+            let s = p.to_string_lossy().to_string();
+            s.strip_prefix(r"\\?\").map(|x| x.to_string()).unwrap_or(s)
+        })
+        .unwrap_or_else(|_| full.to_string_lossy().to_string());
+    Some(abs)
+}
+
 async fn workspace_root_for_app(state: &AppState, app_name: Option<&str>) -> Option<PathBuf> {
     let app_name = app_name?;
     let apps = state.resolved_apps.read().await;
@@ -195,10 +255,58 @@ pub async fn execute_capability_call(
         .get("action")
         .and_then(|v| v.as_str())
         .unwrap_or("call");
-    let data = payload
+    let mut data = payload
         .get("data")
         .cloned()
         .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
+
+    // 图像生成：若调用方未显式提供 api_key/base_url，则从配置的图像 provider
+    // (routing.image_provider 指定;缺省回退第一个名字含 "image" 的 provider)
+    // 取 base_url + 首个 key 注入 data。使 image-gen WASM 无需依赖环境变量,
+    // 且改 provider 后下次调用即生效(无需重启 Core)。key 不经前端,留在 Core 内。
+    if name == "image.generate" {
+        if let serde_json::Value::Object(map) = &mut data {
+            let has_key = map
+                .get("api_key")
+                .and_then(|v| v.as_str())
+                .map(|s| !s.trim().is_empty())
+                .unwrap_or(false);
+            if !has_key {
+                let config = state.config.read().await;
+                let img_provider = config
+                    .routing
+                    .image_provider
+                    .as_deref()
+                    .and_then(|name| config.providers.iter().find(|p| p.name == name))
+                    .or_else(|| {
+                        config
+                            .providers
+                            .iter()
+                            .find(|p| p.name.to_lowercase().contains("image"))
+                    });
+                if let Some(p) = img_provider {
+                    if let Some(k) = p.keys.iter().find(|k| k.enabled && !k.value.trim().is_empty()) {
+                        map.insert(
+                            "api_key".to_string(),
+                            serde_json::Value::String(k.value.trim().to_string()),
+                        );
+                    }
+                    if !p.base_url.trim().is_empty()
+                        && map
+                            .get("base_url")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.trim().is_empty())
+                            .unwrap_or(true)
+                    {
+                        map.insert(
+                            "base_url".to_string(),
+                            serde_json::Value::String(p.base_url.trim().to_string()),
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     let provider_runtime = capability
         .providers
@@ -277,7 +385,26 @@ pub async fn execute_capability_call(
             "data": data,
         });
 
-        let response = dispatch_package_payload(&provider, envelope, state).await;
+        let mut response = dispatch_package_payload(&provider, envelope, state).await;
+
+        // 图像生成后处理：若返回远程 url(部分模型如 flux 返回直链而非本地路径)，
+        // 下载保存到 workspace 并替换为 output_path，统一走本地 /media 加载(更快+可缓存)。
+        if name == "image.generate" {
+            let maybe_url = response
+                .get("data")
+                .and_then(|d| d.get("url"))
+                .and_then(|u| u.as_str())
+                .map(|s| s.to_string());
+            tracing::info!("image.generate postprocess: url present = {}", maybe_url.is_some());
+            if let Some(url) = maybe_url {
+                if let Some(local_path) = download_image_to_workspace(&url).await {
+                    if let Some(data_obj) = response.get_mut("data").and_then(|d| d.as_object_mut()) {
+                        data_obj.remove("url");
+                        data_obj.insert("output_path".to_string(), serde_json::Value::String(local_path));
+                    }
+                }
+            }
+        }
 
         if response.get("error").is_some() {
             Err((StatusCode::BAD_GATEWAY, response))

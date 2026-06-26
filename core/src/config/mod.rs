@@ -101,7 +101,7 @@ fn default_host() -> String {
     "127.0.0.1".into()
 }
 fn default_port() -> u16 {
-    3000
+    17830
 }
 fn default_log_level() -> String {
     "info".into()
@@ -221,6 +221,7 @@ mod tests {
             keys: vec![ApiKeyConfig {
                 value: "sk-test".into(),
                 label: None,
+                enabled: true,
             }],
             models: models.into_iter().map(String::from).collect(),
         }
@@ -232,7 +233,7 @@ mod tests {
             r#"
                 [core]
                 host = "127.0.0.1"
-                port = 3004
+                port = 17830
 
                 [routing]
                 default_provider = "deepseek"
@@ -309,6 +310,12 @@ pub struct ApiKeyConfig {
     pub value: String,
     #[serde(default)]
     pub label: Option<String>,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -317,6 +324,11 @@ pub struct RoutingConfig {
     pub default_provider: Option<String>,
     #[serde(default)]
     pub default_model: Option<String>,
+    /// 图像生成专用 provider（对应某个 [[providers]].name）。
+    /// 出图 capability(image.generate) 调用时,Core 从该 provider 取
+    /// base_url+key 注入请求,使 image-gen WASM 无需环境变量即可出图。
+    #[serde(default)]
+    pub image_provider: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -351,9 +363,6 @@ pub struct FallbackConfig {
 
 fn default_retry_count() -> u32 {
     2
-}
-fn default_true() -> bool {
-    true
 }
 
 impl Default for FallbackConfig {

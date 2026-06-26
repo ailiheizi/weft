@@ -5,10 +5,12 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../features/chat/workspace/artifact.dart';
 import '../api/weft_claw_api.dart';
 import '../models/chat.dart';
 import '../services/chat_storage.dart';
 import 'data_providers.dart';
+import 'preferences_provider.dart';
 import 'sessions_provider.dart';
 
 const _uuid = Uuid();
@@ -39,7 +41,11 @@ class ChatNotifier extends StateNotifier<ChatSession> {
             .map((m) => ChatMessage(
                   id: _uuid.v4(),
                   role: m.role,
-                  content: m.content,
+                  // 助手历史消息也过协议清洗,避免存的是原始 {"mode":...,"assistant":...}
+                  // 协议 JSON 时,切回会话/刷新后整段 JSON 泄漏给用户。
+                  content: m.role == 'assistant'
+                      ? _extractDisplayText(m.content)
+                      : m.content,
                 ))
             .toList();
         // 恢复历史工具产物：从 stream/events 重建 steps，挂到最后一条 assistant 消息。
@@ -78,17 +84,31 @@ class ChatNotifier extends StateNotifier<ChatSession> {
     if (state.selectedProvider != null) return;
     try {
       final providers = await _ref.read(providersProvider.future);
-      if (providers.isNotEmpty && mounted) {
-        final p = providers.first;
-        state = state.copyWith(
-          selectedProvider: p.name,
-          selectedModel: p.models.isNotEmpty ? p.models.first : null,
-        );
+      if (providers.isEmpty || !mounted) return;
+      // 优先恢复本会话上次的选择(持久化),且校验该 provider 仍存在。
+      final saved = await _storage.loadSessionPrefs(state.id);
+      if (saved.provider != null &&
+          providers.any((p) => p.name == saved.provider)) {
+        final p = providers.firstWhere((p) => p.name == saved.provider);
+        final model = (saved.model != null && p.models.contains(saved.model))
+            ? saved.model
+            : (p.models.isNotEmpty ? p.models.first : null);
+        if (mounted) {
+          state = state.copyWith(
+              selectedProvider: p.name, selectedModel: model);
+        }
+        return;
       }
+      // 否则默认选第一个。
+      final p = providers.first;
+      state = state.copyWith(
+        selectedProvider: p.name,
+        selectedModel: p.models.isNotEmpty ? p.models.first : null,
+      );
     } catch (_) {}
   }
 
-  Future<void> sendMessage(String content) async {
+  Future<void> sendMessage(String content, {List<String>? selectedTools}) async {
     if (content.trim().isEmpty) return;
     if (state.isStreaming) return;
 
@@ -103,10 +123,14 @@ class ChatNotifier extends StateNotifier<ChatSession> {
     final displayContent = isTeamCommand
         ? trimmed.replaceFirst(RegExp(r'^/team\s*', caseSensitive: false), '').trim()
         : trimmed;
-    final backendContent = isTeamCommand
+    var backendContent = isTeamCommand
         ? '这是需要团队协作的复杂任务，请务必调用 delegate_to_team 组建团队（planner→implementer→reviewer→integrator）来完成，不要自己直接动手。任务：$displayContent'
         : trimmed;
     if (isTeamCommand && displayContent.isEmpty) return;
+
+    // @文件引用:消息里 @文件名 → 把本会话该文件内容作为上下文附加给后端。
+    // UI 仍显示用户原文(带 @标记),只在发给 AI 的内容里展开。
+    backendContent = _expandFileMentions(backendContent);
 
     final userMsg = ChatMessage.user(displayContent);
     final isFirstMessage = state.messages.isEmpty;
@@ -183,10 +207,13 @@ class ChatNotifier extends StateNotifier<ChatSession> {
     });
 
     try {
+      final workspaceDir = _ref.read(preferencesProvider).workspaceDir;
       final reply = await _api.sendMessage(
         sessionId,
         backendContent,
         model: state.selectedModel,
+        workspaceRoot: workspaceDir.isNotEmpty ? workspaceDir : null,
+        selectedTools: selectedTools,
         cancelToken: _cancelToken,
       );
 
@@ -455,11 +482,108 @@ class ChatNotifier extends StateNotifier<ChatSession> {
   void setProvider(String? provider) {
     if (mounted) {
       state = state.copyWith(selectedProvider: provider, selectedModel: null);
+      _storage.saveSessionPrefs(state.id, provider, null);
     }
   }
 
   void setModel(String? model) {
-    if (mounted) state = state.copyWith(selectedModel: model);
+    if (mounted) {
+      state = state.copyWith(selectedModel: model);
+      _storage.saveSessionPrefs(state.id, state.selectedProvider, model);
+    }
+  }
+
+  /// 展开消息里的 @文件名 引用:从本会话产出的文件 artifact 找到匹配项,
+  /// 把"文件路径 + 内容"作为上下文附加到消息末尾(最多 3 个,每个截断 8KB)。
+  String _expandFileMentions(String content) {
+    final mentions = RegExp(r'@([^\s@]+)')
+        .allMatches(content)
+        .map((m) => m.group(1)!)
+        .toSet();
+    if (mentions.isEmpty) return content;
+    final files = artifactsFromMessages(state.messages)
+        .where((a) => a.kind == ArtifactKind.file && a.content != null)
+        .toList();
+    if (files.isEmpty) return content;
+
+    final matched = <Artifact>[];
+    for (final name in mentions) {
+      final lower = name.toLowerCase();
+      Artifact? hit;
+      for (final a in files) {
+        if (a.title.toLowerCase() == lower ||
+            (a.path?.toLowerCase().endsWith(lower) ?? false) ||
+            a.title.toLowerCase().contains(lower)) {
+          hit = a;
+          break;
+        }
+      }
+      if (hit != null && !matched.any((m) => m.id == hit!.id)) {
+        matched.add(hit);
+      }
+      if (matched.length >= 3) break;
+    }
+    if (matched.isEmpty) return content;
+
+    final buf = StringBuffer(content);
+    buf.write('\n\n--- 引用的文件 ---');
+    for (final a in matched) {
+      var body = a.content ?? '';
+      if (body.length > 8192) body = '${body.substring(0, 8192)}\n…(已截断)';
+      buf.write('\n\n文件: ${a.path ?? a.title}\n```\n$body\n```');
+    }
+    return buf.toString();
+  }
+
+  /// Undo the last conversation round (user message + assistant reply).
+  Future<void> undoLastRound() async {
+    if (state.isStreaming) return;
+    if (state.messages.isEmpty) return;
+    try {
+      await _api.undoRound(state.id);
+      // Remove last round from local state: walk back from end to find last user msg.
+      final msgs = List<ChatMessage>.from(state.messages);
+      while (msgs.isNotEmpty && msgs.last.role != 'user') {
+        msgs.removeLast();
+      }
+      if (msgs.isNotEmpty) msgs.removeLast(); // remove the user msg itself
+      state = state.copyWith(messages: msgs);
+    } catch (_) {}
+  }
+
+  /// 重新生成:回退到指定助手消息所在轮(删掉它及其后所有消息),
+  /// 用紧邻的上一条用户消息重新发送。
+  Future<void> regenerate(String assistantId) async {
+    if (state.isStreaming) return;
+    final msgs = state.messages;
+    final idx = msgs.indexWhere((m) => m.id == assistantId);
+    if (idx < 0) return;
+    // 找该助手消息之前最近的用户消息。
+    String? prompt;
+    for (var i = idx - 1; i >= 0; i--) {
+      if (msgs[i].role == 'user') {
+        prompt = msgs[i].content;
+        break;
+      }
+    }
+    if (prompt == null || prompt.trim().isEmpty) return;
+    // 截断到那条用户消息之前(用户消息会由 sendMessage 重新追加)。
+    final userIdx = msgs.lastIndexWhere(
+        (m) => m.role == 'user' && m.content == prompt, idx - 1);
+    final keep = userIdx >= 0 ? msgs.sublist(0, userIdx) : msgs.sublist(0, idx);
+    state = state.copyWith(messages: keep);
+    await sendMessage(prompt);
+  }
+
+  /// 编辑重发:把指定用户消息及其后所有消息截断,用新内容重新发送。
+  Future<void> editAndResend(String userId, String newContent) async {
+    if (state.isStreaming) return;
+    if (newContent.trim().isEmpty) return;
+    final msgs = state.messages;
+    final idx = msgs.indexWhere((m) => m.id == userId);
+    if (idx < 0) return;
+    state = state.copyWith(messages: msgs.sublist(0, idx));
+    await sendMessage(newContent);
   }
 }
 

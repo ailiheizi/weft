@@ -14,7 +14,6 @@ import '../../shared/widgets/sparkline.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/theme/spacing.dart';
-import '../apps/surface/native_registry.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -203,7 +202,7 @@ class _ConnectionBar extends StatelessWidget {
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: GlassTokens.borderIdle),
+          border: Border.all(color: GlassTokens.borderIdleOf(context)),
         ),
         child: Row(
           children: [
@@ -456,7 +455,7 @@ class _AppCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final warm = theme.extension<AppSurfaces>()!;
-    final hasUi = nativeSurfaceRegistry.containsKey(app.name);
+    final hasUi = true; // native extension 废弃,全走 webview(所有 app 均有 UI)。
     final pinned = ref.watch(pinnedAppsProvider).contains(app.name);
     final statusColor = switch (app.status) {
       ResolvedAppStatus.ok => warm.statusOk,
@@ -484,9 +483,9 @@ class _AppCard extends ConsumerWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: GlassTokens.innerTileFill,
+                  color: GlassTokens.innerTileFillOf(context),
                   borderRadius: BorderRadius.circular(GlassTokens.radiusInner),
-                  border: Border.all(color: GlassTokens.borderIdle),
+                  border: Border.all(color: GlassTokens.borderIdleOf(context)),
                 ),
                 child: Icon(
                   _iconFor(null),

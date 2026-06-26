@@ -1,0 +1,19 @@
+[identity]
+name = "tool-browser"
+version = "0.1.0"
+description = "Provider package bridging chrome-devtools-mcp for browser automation (navigate/snapshot/click/fill/screenshot/...) over a long-lived MCP stdio session."
+
+[package]
+entry = "package.wasm"
+runtime = "wasm"
+api_version = "v1"
+provides = ["tool.browser"]
+
+[capability]
+provides = ["tool.browser"]
+
+[permissions]
+# 长驻 chrome-devtools-mcp 子进程（npx）生命周期：process。
+# chrome-devtools-mcp 连接本机/远程 Chrome remote debugging 端点：network。
+process = true
+network = true

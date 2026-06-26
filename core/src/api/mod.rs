@@ -12,6 +12,7 @@ pub mod packages_runtime;
 pub mod plans;
 pub mod profile;
 pub mod providers;
+pub mod rpc;
 pub mod scenes;
 pub mod services;
 
@@ -23,11 +24,21 @@ use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use openai_compat::AppState;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::ServeDir;
 
 fn route_is_unprotected(path: &str) -> bool {
     path == "/health"
         || path == "/api/health"
         || path == "/v1/models"
+        // 生成的媒体(图/视频)经 HTTP 提供给 web UI 的 <img>/<video> 加载，
+        // 这些标签无法携带 Bearer token，故放行；loopback 绑定已限制访问面。
+        || path.starts_with("/media/")
+        // web UI 静态资源（HTML/JS/CSS），webview 首次加载不带 token header。
+        || path.starts_with("/app-ui")
+        // 包 web UI 静态资源（各包的 ui/dist/），同理 webview 子资源无法带 header。
+        || (path.starts_with("/packages/") && path.contains("/ui/"))
+        // 页面代理（iframe 嵌入原文），同理无法带 header。
+        || path.starts_with("/proxy/page")
 }
 
 fn matches_bearer_token(value: &HeaderValue, token: &str) -> bool {
@@ -55,6 +66,11 @@ async fn require_loopback_token(
     next: Next,
 ) -> Response {
     let path = request.uri().path();
+    // CORS 预检(OPTIONS)永不携带 token，必须放行交给 CorsLayer 处理，
+    // 否则 401 且无 CORS 头 → 浏览器侧 web UI 跨源请求全被拦截。
+    if request.method() == axum::http::Method::OPTIONS {
+        return next.run(request).await;
+    }
     if route_is_unprotected(path) {
         return next.run(request).await;
     }
@@ -242,6 +258,69 @@ async fn stream_events(
     }
 }
 
+/// 包 web UI 静态文件服务。从 packages/official/{name}/ui/dist/ 或
+/// packages/installed/{name}/ui/dist/ 读取文件，按扩展名推断 content-type。
+/// 任何包只要有 ui/dist/ 目录就自动被托管，无需硬编码。
+async fn serve_package_ui(
+    axum::extract::Path((name, path)): axum::extract::Path<(String, String)>,
+) -> Response {
+    if name.contains("..") || path.contains("..") {
+        return (StatusCode::BAD_REQUEST, "invalid path").into_response();
+    }
+    // 查找顺序：installed 优先（用户覆盖），然后 official
+    let candidates = [
+        format!("./packages/installed/{}/ui/dist/{}", name, path),
+        format!("./packages/official/{}/ui/dist/{}", name, path),
+        format!("./packages/installed/{}/ui/{}", name, path),
+        format!("./packages/official/{}/ui/{}", name, path),
+    ];
+    for candidate in &candidates {
+        let full = std::path::Path::new(candidate);
+        if let Ok(bytes) = tokio::fs::read(full).await {
+            let ct = match full.extension().and_then(|e| e.to_str()) {
+                Some("html") => "text/html; charset=utf-8",
+                Some("js") | Some("mjs") => "application/javascript; charset=utf-8",
+                Some("css") => "text/css; charset=utf-8",
+                Some("json") => "application/json",
+                Some("svg") => "image/svg+xml",
+                Some("png") => "image/png",
+                Some("ico") => "image/x-icon",
+                Some("woff2") => "font/woff2",
+                Some("woff") => "font/woff",
+                _ => "application/octet-stream",
+            };
+            return ([(axum::http::header::CONTENT_TYPE, ct)], bytes).into_response();
+        }
+    }
+    (StatusCode::NOT_FOUND, "package ui resource not found").into_response()
+}
+
+/// 提供生成媒体文件给 web UI。路径形如 /media/image-gen/img-1.png，
+/// 映射到 Core 工作目录下的 ./workspace/<path>。仅读，禁路径穿越。
+async fn serve_media(
+    axum::extract::Path(path): axum::extract::Path<String>,
+) -> Response {
+    if path.contains("..") {
+        return (StatusCode::BAD_REQUEST, "invalid path").into_response();
+    }
+    let full = std::path::Path::new("./workspace").join(&path);
+    match tokio::fs::read(&full).await {
+        Ok(bytes) => {
+            let ct = match full.extension().and_then(|e| e.to_str()) {
+                Some("png") => "image/png",
+                Some("jpg") | Some("jpeg") => "image/jpeg",
+                Some("webp") => "image/webp",
+                Some("gif") => "image/gif",
+                Some("mp4") => "video/mp4",
+                Some("webm") => "video/webm",
+                _ => "application/octet-stream",
+            };
+            ([(axum::http::header::CONTENT_TYPE, ct)], bytes).into_response()
+        }
+        Err(_) => (StatusCode::NOT_FOUND, "not found").into_response(),
+    }
+}
+
 pub fn build_router(state: AppState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -249,6 +328,13 @@ pub fn build_router(state: AppState) -> Router {
         .allow_headers(Any);
 
     Router::new()
+        // web UI 静态资源(clients/web-canvas/dist)，webview 加载 /app-ui/ 即可使用。
+        .nest_service("/app-ui", ServeDir::new("./clients/web-canvas/dist"))
+        // 包 web UI 静态资源：/packages/{name}/ui/{path} → packages/official/{name}/ui/dist/{path}
+        // 任何包只要有 ui/dist/ 目录就自动被托管，无需写死。
+        .route("/packages/{name}/ui/{*path}", get(serve_package_ui))
+        // 生成媒体(图/视频)的 HTTP 访问：web UI 用 /media/<workspace下相对路径> 加载。
+        .route("/media/{*path}", get(serve_media))
         // OpenAI-compatible API
         .route(
             "/v1/chat/completions",
@@ -263,6 +349,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/apps/{name}/scenes", get(scenes::list_scenes))
         .route("/api/apps/{name}/scenes", post(scenes::create_scene))
         .route("/api/apps/{name}/scenes/{scene}", get(scenes::get_scene))
+        .route(
+            "/api/apps/{name}/scenes/{scene}",
+            axum::routing::delete(scenes::delete_scene),
+        )
         .route(
             "/api/apps/{name}/scenes/{scene}/bind",
             post(scenes::bind_scene),
@@ -316,14 +406,20 @@ pub fn build_router(state: AppState) -> Router {
             post(generations::rollback_generation),
         )
         .route("/api/shutdown", post(shutdown_core))
+        .route("/rpc", post(rpc::rpc_endpoint))
         .route("/api/providers", get(providers::list_providers))
         .route("/api/providers", post(providers::create_provider))
+        .route(
+            "/api/providers/fetch-models",
+            post(providers::fetch_models),
+        )
         .route("/api/providers/{name}", get(providers::get_provider))
         .route(
             "/api/providers/{name}",
             axum::routing::put(providers::update_provider),
         )
         .route("/api/providers/{name}", delete(providers::delete_provider))
+        .route("/api/providers/{name}/upstream-models", get(providers::list_upstream_models))
         .route("/api/services", get(services::list_services))
         .route("/api/services/{name}/start", post(services::start_service))
         .route("/api/services/{name}/stop", post(services::stop_service))

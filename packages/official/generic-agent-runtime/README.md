@@ -25,7 +25,7 @@ WEFT-core's package call API without modifying WEFT core internals.
 
 - target plugin: `tool-runtime-core`
 - transport: `POST /api/plugins/tool-runtime-core/call`
-- default WEFT core base URL: `http://127.0.0.1:3004`
+- default WEFT core base URL: `http://127.0.0.1:17830`
 
 Example:
 

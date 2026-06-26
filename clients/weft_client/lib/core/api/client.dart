@@ -6,10 +6,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/error.dart';
 import '../providers/preferences_provider.dart';
+import 'ffi_dio_adapter.dart';
 
 part 'client.g.dart';
 
-const _defaultBaseUrl = 'http://127.0.0.1:3004';
+const _defaultBaseUrl = 'http://127.0.0.1:17830';
 const _runtimeTokenFileName = 'runtime-token';
 
 /// Authoritative path to the loopback `runtime-token`. When the client launches
@@ -17,6 +18,13 @@ const _runtimeTokenFileName = 'runtime-token';
 /// under its `--data-dir`, so requests read the right token instead of guessing
 /// among conventional locations (the root cause of 401s). Null = guess as before.
 String? runtimeTokenPathOverride;
+
+/// 公开的 token 读取：复用 interceptor 的候选路径搜索。
+/// 供 webview surface 等需要把 token 传给 web 页的场景使用。
+Future<String> readLoopbackToken() async {
+  final interceptor = _LoopbackAuthInterceptor();
+  return (await interceptor._readLoopbackToken()) ?? '';
+}
 
 class _LoopbackAuthInterceptor extends Interceptor {
   @override
@@ -81,12 +89,23 @@ class _LoopbackAuthInterceptor extends Interceptor {
 
   List<String> _repoDataDirs() {
     final dirs = <String>[];
+    // Walk up from cwd.
     var dir = Directory.current;
     for (var i = 0; i < 8; i++) {
       dirs.add(_joinPath(dir.path, 'data'));
       final parent = dir.parent;
       if (parent.path == dir.path) break;
       dir = parent;
+    }
+    // Also walk up from the exe location (on Windows, cwd may not match
+    // Start-Process -WorkingDirectory due to platform quirks).
+    var exeDir = File(Platform.resolvedExecutable).parent;
+    for (var i = 0; i < 8; i++) {
+      final candidate = _joinPath(exeDir.path, 'data');
+      if (!dirs.contains(candidate)) dirs.add(candidate);
+      final parent = exeDir.parent;
+      if (parent.path == exeDir.path) break;
+      exeDir = parent;
     }
     return dirs;
   }
@@ -159,6 +178,11 @@ Dio apiClient(Ref ref) {
 
   dio.interceptors.add(_LoopbackAuthInterceptor());
   dio.interceptors.add(AppErrorInterceptor());
+
+  // FFI 就绪时:所有 Dio 请求透明走 FFI dispatch(不经网络),上层零改动。
+  if (FfiDioAdapter.enabled) {
+    dio.httpClientAdapter = FfiDioAdapter();
+  }
 
   return dio;
 }

@@ -673,7 +673,12 @@ fn update_handoff_status_result(input: UpdateHandoffStatusInput) -> PackageResul
         return PackageResult::err(error);
     }
     let status = input.status.trim();
-    if !matches!(status, "pending" | "accepted" | "completed") {
+    // failed/rejected 是终态:子 agent 执行失败或评审驳回时,orchestrator 需要把
+    // handoff 标成终态(否则停在 accepted,父任务永远卡在中间态、前端无限轮询)。
+    if !matches!(
+        status,
+        "pending" | "accepted" | "completed" | "failed" | "rejected"
+    ) {
         return PackageResult::err("invalid handoff status".to_string());
     }
 

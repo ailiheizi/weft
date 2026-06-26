@@ -329,6 +329,17 @@ source_authority = "official"
 provides = ["director.plan", "director.turn"]
 
 [[package_sources]]
+name = "rss-reader"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "rss-reader"
+current_source = "packages/official/rss-reader"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["rss.reader"]
+
+[[package_sources]]
 name = "ffmpeg-runtime"
 kind = "wasm"
 package_kind = "provider"
@@ -349,3 +360,25 @@ trusted = true
 signature = "builtin:official"
 source_authority = "official"
 provides = ["image.generate"]
+
+[[package_sources]]
+name = "tool-browser"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "tool-browser"
+current_source = "packages/installed/tool-browser"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["tool.browser"]
+
+[[package_sources]]
+name = "tool-selector"
+kind = "wasm"
+package_kind = "provider"
+runtime_provider = "tool-selector"
+current_source = "packages/installed/tool-selector"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+provides = ["tool.selector"]

@@ -28,7 +28,7 @@ String _join(String a, [String? b, String? c, String? d, String? e]) {
 class CoreProcessManager {
   CoreProcessManager({
     this.host = '127.0.0.1',
-    this.port = 3004,
+    this.port = 17830,
     this.startupTimeout = const Duration(seconds: 30),
   });
 

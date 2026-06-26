@@ -254,6 +254,11 @@ pub struct AppSceneConfig {
     pub disabled_features: Vec<String>,
     pub binding_pins: Vec<AppSceneBindingPin>,
     pub package_pins: Vec<AppScenePackagePin>,
+    /// 角色→模型路由(planner/implementer/reviewer/integrator)。激活该 scene 时
+    /// 写入 KV `team:role_routing`,使切场景即切团队各角色用的模型。空则不改路由。
+    pub role_routing: HashMap<String, crate::config::RoleModel>,
+    /// 会话默认工作区目录。激活该 scene 时作为新会话的默认 workspace_root。空则用系统默认。
+    pub workspace: String,
     pub metadata: AppSceneMetadata,
 }
 
@@ -285,6 +290,10 @@ struct AppSceneConfigSerde {
     package_pins: Vec<AppScenePackagePin>,
     #[serde(default, skip_serializing_if = "scene_metadata_is_empty")]
     metadata: AppSceneMetadata,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    role_routing: HashMap<String, crate::config::RoleModel>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    workspace: String,
 }
 
 impl From<AppSceneConfigSerde> for AppSceneConfig {
@@ -320,6 +329,8 @@ impl From<AppSceneConfigSerde> for AppSceneConfig {
             disabled_features,
             binding_pins,
             package_pins,
+            role_routing: value.role_routing,
+            workspace: value.workspace,
             metadata: value.metadata,
         }
     }
@@ -344,6 +355,8 @@ impl From<&AppSceneConfig> for AppSceneConfigSerde {
             binding_pins: Vec::new(),
             package_pins: Vec::new(),
             metadata: value.metadata.clone(),
+            role_routing: value.role_routing.clone(),
+            workspace: value.workspace.clone(),
         }
     }
 }
@@ -899,6 +912,7 @@ pub fn save_instance_lock(app_dir: &Path, lock: &InstanceLock) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use super::{
         instance_config_path, instance_lock_path, load_instance_config, load_instance_lock,
         load_product_package_declaration, product_package_declaration_path, AppConfigFile,
@@ -1177,6 +1191,8 @@ updated_at = 1710001000
                 created_at: Some(1710000000),
                 updated_at: Some(1710001000),
             },
+            role_routing: HashMap::new(),
+            workspace: String::new(),
         };
 
         let content = toml::to_string_pretty(&scene).expect("scene should serialize");

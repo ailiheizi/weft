@@ -8,48 +8,88 @@ import '../../shared/widgets/skeleton.dart';
 import '../../shared/widgets/hover_card.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../shared/theme/spacing.dart';
+import '../services/services_screen.dart' show ServicesBody;
 import 'import_package_dialog.dart';
 import 'online_install_dialog.dart';
 import 'package_config_dialog.dart';
 
+/// 扩展页：合并「包(WASM)」与「服务(进程)」两类能力提供者，用 Tab 区分。
 class PackagesScreen extends ConsumerWidget {
   const PackagesScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final packages = ref.watch(packagesProvider);
     final theme = Theme.of(context);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: ListView(
-        padding: const EdgeInsets.all(Spacing.lg),
-        children: [
-          Row(children: [
-            Text('Packages',
-                style: theme.textTheme.headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.w600)),
-            const Spacer(),
-            FilledButton.icon(
-              onPressed: () => OnlineInstallDialog.show(context),
-              icon: const Icon(Icons.cloud_download_outlined, size: 15),
-              label: const Text('在线安装'),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: () => ImportPackageDialog.show(context),
-              icon: const Icon(Icons.download_outlined, size: 15),
-              label: const Text('导入本地包'),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.refresh, size: 16),
-              onPressed: () => ref.invalidate(packagesProvider),
-              tooltip: 'Refresh',
-            ),
-          ]),
-          const SizedBox(height: Spacing.lg),
-          packages.when(
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Padding(
+          padding: const EdgeInsets.all(Spacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Text('扩展',
+                    style: theme.textTheme.headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                FilledButton.icon(
+                  onPressed: () => OnlineInstallDialog.show(context),
+                  icon: const Icon(Icons.cloud_download_outlined, size: 15),
+                  label: const Text('在线安装'),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: () => ImportPackageDialog.show(context),
+                  icon: const Icon(Icons.download_outlined, size: 15),
+                  label: const Text('导入本地包'),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 16),
+                  onPressed: () {
+                    ref.invalidate(packagesProvider);
+                    ref.invalidate(servicesProvider);
+                  },
+                  tooltip: 'Refresh',
+                ),
+              ]),
+              const SizedBox(height: Spacing.md),
+              TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                tabs: const [
+                  Tab(text: '包 (WASM)'),
+                  Tab(text: '服务 (进程)'),
+                ],
+              ),
+              const SizedBox(height: Spacing.md),
+              const Expanded(
+                child: TabBarView(
+                  children: [
+                    SingleChildScrollView(child: _PackagesBody()),
+                    SingleChildScrollView(child: ServicesBody()),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 包列表主体（无 Scaffold/标题/工具栏），供扩展页 Tab 复用。
+class _PackagesBody extends ConsumerWidget {
+  const _PackagesBody();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final packages = ref.watch(packagesProvider);
+    return packages.when(
             data: (list) => list.isEmpty
                 ? const EmptyState(
                     icon: Icons.extension_outlined,
@@ -86,10 +126,7 @@ class PackagesScreen extends ConsumerWidget {
               error: e,
               onRetry: () => ref.invalidate(packagesProvider),
             ),
-          ),
-        ],
-      ),
-    );
+          );
   }
 }
 

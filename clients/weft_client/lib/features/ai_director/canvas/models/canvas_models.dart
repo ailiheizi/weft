@@ -20,6 +20,7 @@ class GenParams {
     this.aspectRatio = '16:9',
     this.resolution = '720p',
     this.durationSec = 5,
+    this.batchCount = 1,
   });
 
   final String model;
@@ -27,19 +28,40 @@ class GenParams {
   final String resolution;
   final int durationSec;
 
+  /// 一次生成的变体数量（1-4）。
+  final int batchCount;
+
   GenParams copyWith({
     String? model,
     String? aspectRatio,
     String? resolution,
     int? durationSec,
+    int? batchCount,
   }) {
     return GenParams(
       model: model ?? this.model,
       aspectRatio: aspectRatio ?? this.aspectRatio,
       resolution: resolution ?? this.resolution,
       durationSec: durationSec ?? this.durationSec,
+      batchCount: batchCount ?? this.batchCount,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'model': model,
+        'aspectRatio': aspectRatio,
+        'resolution': resolution,
+        'durationSec': durationSec,
+        'batchCount': batchCount,
+      };
+
+  factory GenParams.fromJson(Map<String, dynamic> json) => GenParams(
+        model: json['model'] as String? ?? 'gpt-image-2-vip',
+        aspectRatio: json['aspectRatio'] as String? ?? '16:9',
+        resolution: json['resolution'] as String? ?? '720p',
+        durationSec: (json['durationSec'] as num?)?.toInt() ?? 5,
+        batchCount: (json['batchCount'] as num?)?.toInt() ?? 1,
+      );
 }
 
 /// 画布节点 — 一张图 / 一段视频 / 一段音乐 / 一段文本，定位在画布坐标系上。
@@ -119,6 +141,52 @@ class CanvasNode {
           errorMessage == _sentinel ? this.errorMessage : errorMessage as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': kind.name,
+        'x': position.dx,
+        'y': position.dy,
+        'w': size.width,
+        'h': size.height,
+        'shotId': shotId,
+        'title': title,
+        'assetPath': assetPath,
+        'thumbnailPath': thumbnailPath,
+        'prompt': prompt,
+        'params': params.toJson(),
+        'status': status.name,
+        'errorMessage': errorMessage,
+      };
+
+  factory CanvasNode.fromJson(Map<String, dynamic> json) => CanvasNode(
+        id: json['id'] as String,
+        kind: CanvasNodeKind.values.firstWhere(
+          (k) => k.name == json['kind'],
+          orElse: () => CanvasNodeKind.image,
+        ),
+        position: Offset(
+          (json['x'] as num?)?.toDouble() ?? 0,
+          (json['y'] as num?)?.toDouble() ?? 0,
+        ),
+        size: Size(
+          (json['w'] as num?)?.toDouble() ?? 180,
+          (json['h'] as num?)?.toDouble() ?? 180,
+        ),
+        shotId: json['shotId'] as String?,
+        title: json['title'] as String? ?? '',
+        assetPath: json['assetPath'] as String?,
+        thumbnailPath: json['thumbnailPath'] as String?,
+        prompt: json['prompt'] as String?,
+        params: json['params'] is Map
+            ? GenParams.fromJson(Map<String, dynamic>.from(json['params'] as Map))
+            : const GenParams(),
+        status: NodeStatus.values.firstWhere(
+          (s) => s.name == json['status'],
+          orElse: () => NodeStatus.idle,
+        ),
+        errorMessage: json['errorMessage'] as String?,
+      );
 }
 
 /// 节点间连线 — 表达派生关系 / 分镜流。
@@ -133,6 +201,18 @@ class CanvasEdge {
   final String id;
   final String fromNodeId;
   final String toNodeId;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'from': fromNodeId,
+        'to': toNodeId,
+      };
+
+  factory CanvasEdge.fromJson(Map<String, dynamic> json) => CanvasEdge(
+        id: json['id'] as String,
+        fromNodeId: json['from'] as String,
+        toNodeId: json['to'] as String,
+      );
 }
 
 /// Shot（分镜）— 把若干节点归为一组。
@@ -158,6 +238,20 @@ class Shot {
       nodeIds: nodeIds ?? this.nodeIds,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'order': order,
+        'nodeIds': nodeIds,
+      };
+
+  factory Shot.fromJson(Map<String, dynamic> json) => Shot(
+        id: json['id'] as String,
+        title: json['title'] as String? ?? '',
+        order: (json['order'] as num?)?.toInt() ?? 0,
+        nodeIds: (json['nodeIds'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      );
 }
 
 /// copyWith 哨兵 — 区分「不传」与「显式置 null」。

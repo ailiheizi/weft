@@ -258,7 +258,23 @@ pub fn dispatch_one(input: String) -> FnResult<String> {
 }
 
 fn load_board_ids() -> Vec<String> {
-    parse_json_or_default::<Vec<BoardIndexEntry>>(kv_get(BOARD_INDEX_KEY))
+    // 区分"无 board"与"索引损坏":后者会让 orchestrator 静默空转(用户看不到任何进度,
+    // 误以为卡死或崩溃),必须上报。
+    let raw = kv_get(BOARD_INDEX_KEY);
+    if let Some(ref json) = raw {
+        if !json.trim().is_empty()
+            && serde_json::from_str::<Vec<BoardIndexEntry>>(json).is_err()
+        {
+            log_warn(&format!(
+                "board index '{}' present but failed to parse (len={}); orchestrator will see 0 boards. \
+                 Raw head: {}",
+                BOARD_INDEX_KEY,
+                json.len(),
+                json.chars().take(120).collect::<String>()
+            ));
+        }
+    }
+    parse_json_or_default::<Vec<BoardIndexEntry>>(raw)
         .into_iter()
         .filter_map(|entry| {
             let board_id = entry.board_id.trim().to_string();
@@ -539,10 +555,11 @@ fn dispatch_review_vote(
         }
         Err(error) => {
             log_warn(&format!(
-                "review vote [{}] execute_delegate failed for task '{}': {} (counting as approve)",
+                "review vote [{}] execute_delegate failed for task '{}': {} (counting as REJECT — \
+                 a review that could not run must not silently pass)",
                 perspective, handoff.task_id, error
             ));
-            "approve"
+            "reject"
         }
     };
     // 无论 LLM 成功/失败,投票 handoff 处理完即标记终态,防止 dispatch 循环反复重投(死循环根因)。

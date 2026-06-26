@@ -225,7 +225,67 @@ pub async fn bind_scene(
     config.active_scene = scene_name.clone();
     crate::app::save_instance_config_to_path(&config_path, &config).map_err(scene_write_failed)?;
 
+    // 联动应用 scene 的运行时偏好:把 role_routing 写入 KV `team:role_routing`,
+    // 使切场景即切团队各角色用的模型(team-runtime 下次按角色读取)。
+    // 仅当 scene 显式配置了 role_routing 时才覆盖,空则保持现状(不清空已有路由)。
+    if !scene.role_routing.is_empty() {
+        if let Ok(role_routing_json) = serde_json::to_string(&scene.role_routing) {
+            if let Some(handle) = state.wasm_handle.read().await.as_ref() {
+                handle.kv_set("team:role_routing", &role_routing_json);
+                tracing::info!(
+                    "scene '{}' bound: applied {} role(s) to team:role_routing",
+                    scene_name,
+                    scene.role_routing.len()
+                );
+            }
+        }
+    }
+
     Ok(scene_response(name, scene_name, scene))
+}
+
+pub async fn delete_scene(
+    Path((name, scene_name)): Path<(String, String)>,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let apps = state.resolved_apps.read().await;
+    let app = apps.get(&name).ok_or_else(|| app_not_found(&name))?;
+    let config_path = instance_config_path(app)?;
+    let config = load_instance_config(app);
+    let scene_name = scene_file_name(&scene_name)?;
+
+    if !config.scenes.contains_key(&scene_name) {
+        return Err(scene_not_found(&name, &scene_name));
+    }
+    // 不允许删除当前激活场景,避免 active_scene 指向不存在的场景(否则后续
+    // propose_generation 会拿不到场景配置)。先 bind 到别的场景再删。
+    if config.active_scene == scene_name {
+        return Err((
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({
+                "error": format!("Cannot delete active scene '{}'", scene_name),
+                "reason": "scene_active",
+                "app": name,
+                "scene": scene_name,
+            })),
+        ));
+    }
+
+    let scene_path = config_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .join("scenes")
+        .join(format!("{}.toml", scene_name));
+    if scene_path.exists() {
+        std::fs::remove_file(&scene_path)
+            .map_err(|e| scene_write_failed(anyhow::Error::from(e)))?;
+    }
+
+    Ok(Json(serde_json::json!({
+        "app": name,
+        "deleted": scene_name,
+        "active_scene": config.active_scene,
+    })))
 }
 
 #[cfg(test)]

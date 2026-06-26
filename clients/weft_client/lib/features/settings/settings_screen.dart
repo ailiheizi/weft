@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -109,6 +110,37 @@ class SettingsScreen extends ConsumerWidget {
           _Section(
             title: 'Preferences',
             children: [
+              ListTile(
+                leading: const Icon(Icons.brightness_6_outlined, size: 18),
+                title: const Text('主题', style: TextStyle(fontSize: 14)),
+                subtitle: const Text('外观:暗色 / 亮色 / 跟随系统',
+                    style: TextStyle(fontSize: 12)),
+                dense: true,
+                trailing: SegmentedButton<ThemeMode>(
+                  style: const ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  segments: const [
+                    ButtonSegment(
+                        value: ThemeMode.dark,
+                        icon: Icon(Icons.dark_mode_outlined, size: 16),
+                        tooltip: '暗色'),
+                    ButtonSegment(
+                        value: ThemeMode.light,
+                        icon: Icon(Icons.light_mode_outlined, size: 16),
+                        tooltip: '亮色'),
+                    ButtonSegment(
+                        value: ThemeMode.system,
+                        icon: Icon(Icons.brightness_auto_outlined, size: 16),
+                        tooltip: '跟随系统'),
+                  ],
+                  selected: {prefs.themeMode},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (s) =>
+                      prefsNotifier.setThemeMode(s.first),
+                ),
+              ),
+              const Divider(height: 1),
               SwitchListTile(
                 secondary: const Icon(Icons.show_chart, size: 18),
                 title: const Text('显示趋势图',
@@ -130,31 +162,17 @@ class SettingsScreen extends ConsumerWidget {
                 onChanged: prefsNotifier.setEnableAnimations,
                 dense: true,
               ),
+              const Divider(height: 1),
+              _WorkspaceDirTile(
+                currentDir: prefs.workspaceDir,
+                onSave: (value) => prefsNotifier.setWorkspaceDir(value),
+              ),
             ],
           ),
           const SizedBox(height: 16),
           const _Section(
             title: 'Package Catalog',
             children: [_CatalogUrlTile()],
-          ),
-          const SizedBox(height: 16),
-          const _Section(
-            title: 'Keyboard Shortcuts',
-            children: [
-              _ShortcutTile(
-                  keys: ['Ctrl', 'K'], description: '打开命令面板（搜索 / 跳转 / 执行）'),
-              _ShortcutTile(keys: ['G', 'D'], description: '跳转到 Dashboard'),
-              _ShortcutTile(keys: ['G', 'C'], description: '跳转到 Chat'),
-              _ShortcutTile(keys: ['G', 'O'], description: '跳转到 Orchestration'),
-              _ShortcutTile(keys: ['G', 'P'], description: '跳转到 Packages'),
-              _ShortcutTile(keys: ['G', 'R'], description: '跳转到 Providers'),
-              _ShortcutTile(keys: ['G', 'V'], description: '跳转到 Services'),
-              _ShortcutTile(keys: ['G', 'S'], description: '跳转到 Settings'),
-              _ShortcutTile(
-                  keys: ['↑', '↓', '↵'],
-                  description: '命令面板内：上下选择 / 回车执行'),
-              _ShortcutTile(keys: ['Esc'], description: '关闭命令面板'),
-            ],
           ),
           const SizedBox(height: 16),
           _Section(
@@ -280,70 +298,6 @@ class _SettingTile extends StatelessWidget {
   }
 }
 
-/// 快捷键说明行：左侧描述，右侧键帽序列。
-class _ShortcutTile extends StatelessWidget {
-  const _ShortcutTile({required this.keys, required this.description});
-  final List<String> keys;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(description,
-                style: theme.textTheme.bodyMedium),
-          ),
-          for (var i = 0; i < keys.length; i++) ...[
-            if (i > 0)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text('then',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-              ),
-            _KeyCap(label: keys[i]),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// 键帽样式（内凹深色 + hairline 边 + 等宽字）。
-class _KeyCap extends StatelessWidget {
-  const _KeyCap({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      margin: const EdgeInsets.only(left: 4),
-      constraints: const BoxConstraints(minWidth: 22),
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0A0B0E),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0x17FFFFFF)),
-      ),
-      child: Text(
-        label,
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          fontFamily: 'monospace',
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          fontFeatures: [FontFeature.tabularFigures()],
-        ).copyWith(color: theme.colorScheme.onSurface),
-      ),
-    );
-  }
-}
-
 /// 包清单(catalog)地址设置项:显示当前 URL,点击弹框编辑并持久化。
 class _CatalogUrlTile extends ConsumerStatefulWidget {
   const _CatalogUrlTile();
@@ -428,7 +382,7 @@ class _CoreUrlTile extends StatelessWidget {
               controller: controller,
               autofocus: true,
               decoration: const InputDecoration(
-                hintText: 'http://127.0.0.1:3004',
+                hintText: 'http://127.0.0.1:17830',
               ),
             ),
             const SizedBox(height: 8),
@@ -443,7 +397,7 @@ class _CoreUrlTile extends StatelessWidget {
               onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
           TextButton(
               onPressed: () =>
-                  Navigator.pop(ctx, 'http://127.0.0.1:3004'),
+                  Navigator.pop(ctx, 'http://127.0.0.1:17830'),
               child: const Text('恢复默认')),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, controller.text.trim()),
@@ -464,6 +418,91 @@ class _CoreUrlTile extends StatelessWidget {
       icon: Icons.dns_outlined,
       title: 'Core URL',
       subtitle: url,
+      trailing: const Icon(Icons.edit_outlined, size: 15),
+      onTap: () => _edit(context),
+    );
+  }
+}
+
+/// AI 工作目录设置项：输入框 + 浏览按钮。
+class _WorkspaceDirTile extends StatelessWidget {
+  const _WorkspaceDirTile({required this.currentDir, required this.onSave});
+
+  final String currentDir;
+  final Future<void> Function(String) onSave;
+
+  Future<void> _edit(BuildContext context) async {
+    final controller = TextEditingController(text: currentDir);
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('工作目录'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      hintText: '留空使用默认(data/workspaces/)',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.folder_open),
+                  tooltip: '浏览',
+                  onPressed: () async {
+                    final picked = await FilePicker.getDirectoryPath(
+                      dialogTitle: '选择工作目录',
+                      initialDirectory: controller.text.isNotEmpty
+                          ? controller.text
+                          : null,
+                    );
+                    if (picked != null) {
+                      controller.text = picked;
+                    }
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'AI 文件操作(读写/执行)的沙盒目录。设置后新对话中的相对路径都解析到此目录。',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, ''),
+              child: const Text('恢复默认')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('保存')),
+        ],
+      ),
+    );
+    if (result != null) {
+      await onSave(result);
+      messenger.showSnackBar(
+          SnackBar(content: Text(result.isEmpty ? '已恢复默认工作目录' : '工作目录已设为 $result')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingTile(
+      icon: Icons.folder_outlined,
+      title: '工作目录',
+      subtitle: currentDir.isEmpty ? '默认 (data/workspaces/)' : currentDir,
       trailing: const Icon(Icons.edit_outlined, size: 15),
       onTap: () => _edit(context),
     );

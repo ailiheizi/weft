@@ -10,6 +10,10 @@ set(BINARY_NAME "weft_client")
 # versions of CMake.
 cmake_policy(VERSION 3.14...3.25)
 
+# Install 到 runner 输出目录(而非 C:/Program Files):flutter debug 不需要系统级安装,
+# 且 media_kit/webview_windows 的 INSTALL step 会把 DLL 复制到这里。
+set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/runner/$<CONFIG>" CACHE PATH "" FORCE)
+
 # Define build configuration option.
 get_property(IS_MULTICONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if(IS_MULTICONFIG)
@@ -101,6 +105,13 @@ install(CODE "
   " COMPONENT Runtime)
 install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
+
+# weft_core.dll(FFI):从 core 的 cargo 构建输出自动复制到 runner 目录。
+# 这样 flutter build 后 DLL 自动到位,不需要手动 cp。
+set(WEFT_CORE_DLL "${CMAKE_CURRENT_SOURCE_DIR}/../../core/target-verify/debug/weft_core.dll")
+if(EXISTS "${WEFT_CORE_DLL}")
+  install(FILES "${WEFT_CORE_DLL}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
+endif()
 
 # Install the AOT library on non-Debug builds only.
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"

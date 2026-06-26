@@ -73,11 +73,21 @@ class ProvidersScreen extends ConsumerWidget {
   }
 
   void _showProviderDialog(
-      BuildContext context, WidgetRef ref, ProviderConfig? existing) {
+      BuildContext context, WidgetRef ref, ProviderConfig? existing) async {
+    // 编辑时:从后端拉完整 provider(含 keys),列表接口只给 key_count。
+    var full = existing;
+    if (existing != null) {
+      try {
+        full = await ref.read(coreRepositoryProvider).getProvider(existing.name);
+      } catch (_) {
+        full = existing; // 拉取失败退回列表数据(keys 可能为空)。
+      }
+    }
+    if (!context.mounted) return;
     showDialog(
       context: context,
       builder: (_) => _ProviderDialog(
-        existing: existing,
+        existing: full,
         onSave: (config) async {
           final repo = ref.read(coreRepositoryProvider);
           if (existing != null) {
@@ -87,6 +97,9 @@ class ProvidersScreen extends ConsumerWidget {
           }
           ref.invalidate(providersProvider);
         },
+        onFetchModels: (baseUrl, apiKey, format) => ref
+            .read(coreRepositoryProvider)
+            .fetchModels(baseUrl: baseUrl, apiKey: apiKey, format: format),
       ),
     );
   }
@@ -127,9 +140,9 @@ class _ProviderCard extends StatelessWidget {
                         color: theme.colorScheme.onSurfaceVariant)),
                 const SizedBox(height: 2),
                 Text(
-                  '${provider.keys.length} key${provider.keys.length == 1 ? '' : 's'} configured',
+                  '${provider.keyCount} key${provider.keyCount == 1 ? '' : 's'} configured',
                   style: theme.textTheme.bodySmall?.copyWith(
-                      color: provider.keys.isEmpty
+                      color: provider.keyCount == 0
                           ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)
                           : theme.colorScheme.primary),
                 ),
@@ -193,9 +206,17 @@ class _FormatChip extends StatelessWidget {
 }
 
 class _ProviderDialog extends StatefulWidget {
-  const _ProviderDialog({this.existing, required this.onSave});
+  const _ProviderDialog({
+    this.existing,
+    required this.onSave,
+    required this.onFetchModels,
+  });
   final ProviderConfig? existing;
   final Future<void> Function(ProviderConfig) onSave;
+
+  /// 从 provider 拉取模型(base_url, apiKey, format)→ 模型 id 列表。
+  final Future<List<String>> Function(String baseUrl, String apiKey,
+      String format) onFetchModels;
 
   @override
   State<_ProviderDialog> createState() => _ProviderDialogState();
@@ -227,12 +248,44 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       TextEditingController(text: widget.existing?.name ?? '');
   late final _urlCtrl =
       TextEditingController(text: widget.existing?.baseUrl ?? '');
-  late final _modelsCtrl =
-      TextEditingController(text: widget.existing?.models.join(', ') ?? '');
   late String _format = widget.existing?.format ?? 'openai';
   late final List<_KeyEntry> _keys;
   bool _saving = false;
   String? _error;
+
+  /// 已选模型(多选)。可用模型 = 已选 ∪ 拉取到的。
+  late final Set<String> _selectedModels =
+      (widget.existing?.models ?? const <String>[]).toSet();
+  final Set<String> _availableModels = {};
+  bool _fetchingModels = false;
+  String? _fetchError;
+  String _modelQuery = '';
+
+  Future<void> _fetchModels() async {
+    setState(() {
+      _fetchingModels = true;
+      _fetchError = null;
+    });
+    try {
+      final key = _keys.isNotEmpty ? _keys.first.keyCtrl.text.trim() : '';
+      final models = await widget.onFetchModels(
+          _urlCtrl.text.trim(), key, _format);
+      setState(() {
+        _availableModels
+          ..clear()
+          ..addAll(models);
+        _fetchingModels = false;
+        if (models.isEmpty) _fetchError = '未获取到模型(检查 URL / Key)';
+      });
+    } catch (e) {
+      setState(() {
+        _fetchingModels = false;
+        _fetchError = e.toString().length > 80
+            ? '${e.toString().substring(0, 80)}…'
+            : e.toString();
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -250,7 +303,6 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   void dispose() {
     _nameCtrl.dispose();
     _urlCtrl.dispose();
-    _modelsCtrl.dispose();
     for (final e in _keys) {
       e.dispose();
     }
@@ -307,11 +359,113 @@ class _ProviderDialogState extends State<_ProviderDialog> {
               onChanged: (v) => setState(() => _format = v!),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _modelsCtrl,
-              decoration:
-                  const InputDecoration(labelText: 'Models (comma separated)'),
+            // ── Models(多选 chips + 手动获取)──────────────────────────────
+            Row(
+              children: [
+                Text('Models',
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: _fetchingModels ? null : _fetchModels,
+                  icon: _fetchingModels
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.download_outlined, size: 16),
+                  label: const Text('获取模型'),
+                ),
+              ],
             ),
+            if (_fetchError != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(_fetchError!,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.error)),
+              ),
+            Builder(builder: (context) {
+              final all = {..._selectedModels, ..._availableModels}.toList()
+                ..sort();
+              if (all.isEmpty && _modelQuery.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Text('点「获取模型」从 provider 拉取,或在搜索框输入模型名手动添加',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                );
+              }
+              final q = _modelQuery.trim().toLowerCase();
+              final filtered = q.isEmpty
+                  ? all
+                  : all.where((m) => m.toLowerCase().contains(q)).toList();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 搜索/手动输入框
+                  TextField(
+                    onChanged: (v) => setState(() => _modelQuery = v),
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      prefixIcon: const Icon(Icons.search, size: 16),
+                      hintText: '搜索或输入模型名后回车添加…',
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 8),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      suffixIcon: q.isNotEmpty &&
+                              !all.contains(_modelQuery.trim())
+                          ? IconButton(
+                              icon: const Icon(Icons.add, size: 16),
+                              tooltip: '添加',
+                              onPressed: () => setState(() {
+                                _selectedModels.add(_modelQuery.trim());
+                                _modelQuery = '';
+                              }),
+                            )
+                          : null,
+                    ),
+                    onSubmitted: (v) {
+                      final trimmed = v.trim();
+                      if (trimmed.isNotEmpty) {
+                        setState(() {
+                          _selectedModels.add(trimmed);
+                          _modelQuery = '';
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  // 已选 + 可选(可滚动,限高)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 160),
+                    child: SingleChildScrollView(
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final m in filtered)
+                            FilterChip(
+                              label:
+                                  Text(m, style: const TextStyle(fontSize: 12)),
+                              selected: _selectedModels.contains(m),
+                              onSelected: (sel) => setState(() {
+                                if (sel) {
+                                  _selectedModels.add(m);
+                                } else {
+                                  _selectedModels.remove(m);
+                                }
+                              }),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }),
             const SizedBox(height: 20),
             // ── API Keys section ──────────────────────────────────────
             Align(
@@ -338,6 +492,57 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    // Reorder buttons
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: IconButton(
+                            padding: EdgeInsets.zero,
+                            icon: Icon(Icons.arrow_drop_up,
+                                size: 18,
+                                color: i == 0
+                                    ? theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.2)
+                                    : theme.colorScheme.onSurface),
+                            onPressed: i == 0
+                                ? null
+                                : () {
+                                    setState(() {
+                                      final item = _keys.removeAt(i);
+                                      _keys.insert(i - 1, item);
+                                    });
+                                  },
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                        SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: IconButton(
+                            padding: EdgeInsets.zero,
+                            icon: Icon(Icons.arrow_drop_down,
+                                size: 18,
+                                color: i == _keys.length - 1
+                                    ? theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.2)
+                                    : theme.colorScheme.onSurface),
+                            onPressed: i == _keys.length - 1
+                                ? null
+                                : () {
+                                    setState(() {
+                                      final item = _keys.removeAt(i);
+                                      _keys.insert(i + 1, item);
+                                    });
+                                  },
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 4),
                     // Label field
                     SizedBox(
                       width: 100,
@@ -446,7 +651,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     setState(() {
       if (_nameCtrl.text.trim().isEmpty) _nameCtrl.text = p.name;
       _urlCtrl.text = p.baseUrl;
-      _modelsCtrl.text = p.defaultModel;
+      if (p.defaultModel.isNotEmpty) _selectedModels.add(p.defaultModel);
       _format = p.format;
       _error = null;
     });
@@ -457,11 +662,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       _saving = true;
       _error = null;
     });
-    final models = _modelsCtrl.text
-        .split(',')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
+    final models = _selectedModels.toList()..sort();
     final keys = _keys
         .where((e) => e.keyCtrl.text.trim().isNotEmpty)
         .map((e) => ApiKeyConfig(

@@ -2,13 +2,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../../features/ai_director/canvas/vyuh_poc_page.dart';
 import '../../features/apps/package_surface_screen.dart';
 import '../../features/chat/chat_screen.dart';
 import '../../features/dashboard/dashboard_screen.dart';
+import '../../features/management/management_screens.dart';
 import '../../features/orchestration/orchestration_screen.dart';
 import '../../features/packages/packages_screen.dart';
 import '../../features/providers_config/providers_screen.dart';
-import '../../features/services/services_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../main.dart' show navigatorKey;
 import '../widgets/app_shell.dart';
@@ -77,14 +78,25 @@ GoRouter router(Ref ref) {
                 _fade(const ProvidersScreen()),
           ),
           GoRoute(
-            path: '/services',
-            pageBuilder: (context, state) =>
-                _fade(const ServicesScreen()),
+            path: '/vyuh-poc',
+            pageBuilder: (context, state) => _fade(const VyuhPocPage()),
           ),
           GoRoute(
             path: '/settings',
             pageBuilder: (context, state) =>
                 _fade(const SettingsScreen()),
+          ),
+          GoRoute(
+            path: '/scenes',
+            pageBuilder: (context, state) => _fade(const ScenesScreen()),
+          ),
+          GoRoute(
+            path: '/skills',
+            pageBuilder: (context, state) => _fade(const SkillsScreen()),
+          ),
+          GoRoute(
+            path: '/mcp',
+            pageBuilder: (context, state) => _fade(const McpScreen()),
           ),
         ],
       ),

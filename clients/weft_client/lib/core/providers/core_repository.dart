@@ -55,6 +55,23 @@ class CoreRepository {
     return res.data ?? {};
   }
 
+  /// 直接调用某个 capability（绕过 app generation 校验）。
+  /// 画布就地生成走这条：/api/capabilities/{capability}/call。
+  /// 图像/视频生成单次可能耗时数十秒到数分钟，这里单独放宽接收超时，
+  /// 避免命中全局 30s receiveTimeout 导致"生成失败"（图其实还在后端跑）。
+  Future<Map<String, dynamic>> callCapability(
+      String capability, String action, Map<String, dynamic> data) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/api/capabilities/$capability/call',
+      data: {'action': action, 'data': data},
+      options: Options(
+        receiveTimeout: const Duration(minutes: 5),
+        sendTimeout: const Duration(minutes: 5),
+      ),
+    );
+    return res.data ?? {};
+  }
+
   Future<void> updateBinding(
       String appName, String capability, String provider) async {
     await _dio.post<Map<String, dynamic>>(
@@ -74,6 +91,27 @@ class CoreRepository {
     return _parseList(list, ProviderConfig.fromJson, 'provider');
   }
 
+  /// 取单个 provider 详情(含 keys,用于编辑对话框)。
+  Future<ProviderConfig> getProvider(String name) async {
+    final res = await _dio.get<Map<String, dynamic>>('/api/providers/$name');
+    return ProviderConfig.fromJson(res.data!);
+  }
+
+  /// 从 provider 拉取可用模型列表(「获取模型」按钮)。
+  Future<List<String>> fetchModels({
+    required String baseUrl,
+    String apiKey = '',
+    String format = 'openai',
+  }) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/api/providers/fetch-models',
+      data: {'base_url': baseUrl, 'api_key': apiKey, 'format': format},
+    );
+    return (res.data?['models'] as List? ?? [])
+        .whereType<String>()
+        .toList();
+  }
+
   Future<ProviderConfig> createProvider(ProviderConfig config) async {
     final res = await _dio.post<Map<String, dynamic>>(
       '/api/providers',
@@ -82,12 +120,11 @@ class CoreRepository {
     return ProviderConfig.fromJson(res.data!);
   }
 
-  Future<ProviderConfig> updateProvider(String name, ProviderConfig config) async {
-    final res = await _dio.put<Map<String, dynamic>>(
+  Future<void> updateProvider(String name, ProviderConfig config) async {
+    await _dio.put<Map<String, dynamic>>(
       '/api/providers/$name',
       data: config.toJson(),
     );
-    return ProviderConfig.fromJson(res.data!);
   }
 
   Future<void> deleteProvider(String name) async {

@@ -15,7 +15,6 @@ class ServicesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final services = ref.watch(servicesProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -34,7 +33,21 @@ class ServicesScreen extends ConsumerWidget {
             ),
           ]),
           const SizedBox(height: Spacing.lg),
-          services.when(
+          const ServicesBody(),
+        ],
+      ),
+    );
+  }
+}
+
+/// 服务列表主体（无 Scaffold/标题），供独立页或合并页(扩展 Tab)复用。
+class ServicesBody extends ConsumerWidget {
+  const ServicesBody({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final services = ref.watch(servicesProvider);
+    return services.when(
             data: (list) => list.isEmpty
                 ? const EmptyState(
                     icon: Icons.dns_outlined,
@@ -69,10 +82,7 @@ class ServicesScreen extends ConsumerWidget {
               error: e,
               onRetry: () => ref.invalidate(servicesProvider),
             ),
-          ),
-        ],
-      ),
-    );
+          );
   }
 }
 

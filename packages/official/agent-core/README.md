@@ -30,7 +30,7 @@ struct AgentConfig {
 
 ## WebSocket API
 
-Connect to `ws://localhost:3004/ws/plugins/agent-core`
+Connect to `ws://localhost:17830/ws/plugins/agent-core`
 
 ### Actions
 

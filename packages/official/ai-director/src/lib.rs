@@ -10,6 +10,7 @@ const AGENT_RUNTIME_CAPABILITY: &str = "agent.runtime";
 const SESSION_EVENTS_CAPABILITY: &str = "session.events";
 const DIRECTOR_PLAN_SYSTEM_PROMPT: &str = "你是一位资深视频剪辑导演。根据用户提供的素材清单，输出一个剪辑方案。要求：1)选用哪些片段(给时间区间) 2)排序逻辑 3)节奏与情绪基调 4)最关键——解释每个决策的理由(为什么这么剪)。方案要体现导演思维，不要罗列功能。";
 const DIRECTOR_TURN_SYSTEM_PROMPT: &str = "你是 AI 导演，一支创作 Agent 队伍的总导演。用户给你创意或素材后，你先准确理解意图，再决定如何推进。若创意仍模糊、关键信息缺失，或存在多种合理方向（如品牌风格、叙事角度、节奏基调、受众取向不明），优先调用 ask_user，提出一个简洁问题，并给出 2 到 4 个具体可选方向，让用户快速做选择；问完后等待用户回复，不要擅自展开。若任务是大型、多阶段或多模态创作，需要文案、分镜、配音、剪辑、整合等多个环节协作，优先调用 delegate_to_team，把目标清晰委派给创作团队推进，而不是自己包办全部产出。若任务范围单一且目标清晰，例如只写一句文案、只出一个剪辑方案、只整理一个创意方向，可直接完成；其中涉及剪辑方案时可调用 director.plan。你具备实际的创作执行能力：需要生成画面时调用 generate_image（传入英文提示词 prompt 与输出路径 output_path 即可直接产出图片文件）；需要把多张图片合成视频成片时调用 render_video（传入 images 路径列表、durations 每张时长、output 输出路径）。当用户明确要求出图或成片、且方向已清晰时，直接调用这些工具完成，不要声称自己无法生成图像或推脱给外部工具。所有输出都要体现导演视角、创作判断与可解释理由，不要机械罗列功能或流程。";
+const DIRECTOR_WORKFLOW_SYSTEM_PROMPT: &str = "你是 AI 导演。把用户的创意拆解成一条多镜头短片的工作流蓝图。你只做规划，绝不调用任何工具、绝不自己生成图片或视频——生成由下游执行引擎负责。你的唯一输出是一个严格的 JSON 对象（不要任何额外文字、不要 markdown 代码块包裹、直接输出 JSON）：{\"title\":\"片名\",\"nodes\":[{\"id\":\"img1\",\"kind\":\"image\",\"title\":\"镜头中文名\",\"prompt\":\"该画面的详细英文生成提示词\"},{\"id\":\"img2\",\"kind\":\"image\",\"title\":\"...\",\"prompt\":\"...\"},{\"id\":\"vid1\",\"kind\":\"video\",\"title\":\"合成短片\"}],\"edges\":[{\"from\":\"img1\",\"to\":\"vid1\"},{\"from\":\"img2\",\"to\":\"vid1\"}]}。规则：每个镜头一个 kind=image 的节点并写好英文 prompt（体现你的导演判断：画面内容、光线、氛围、镜头语言）；最后必须有且只有一个 kind=video 的汇聚节点；所有 image 节点都要用 edges 连到那个 video 节点。镜头数量按创意合理决定（一般 3-6 个）。只输出 JSON，不要解释。";
 
 fn cancel_key(session_id: &str) -> String {
     format!("ai-director:cancel:{}", session_id)
@@ -242,6 +243,7 @@ fn do_describe() -> PackageResult {
                 "describe",
                 "health",
                 "send_message",
+                "plan_workflow",
                 "list_sessions",
                 "get_session_messages",
                 "list_events",
@@ -512,6 +514,7 @@ fn dispatch(action: &str, data: Value) -> PackageResult {
         "describe" => do_describe(),
         "health" => do_health(),
         "generate_plan" => generate_plan(&data),
+        "plan_workflow" => plan_workflow(&data),
         "send_message" => do_send_message(serde_json::from_value(data).unwrap_or_default()),
         "list_sessions" => do_list_sessions(),
         "get_session_messages" => {
@@ -610,6 +613,53 @@ fn generate_plan(data: &Value) -> PackageResult {
 
     PackageResult::ok(serde_json::json!({
         "plan": plan,
+        "raw_usage": response.usage,
+    }))
+}
+
+/// 把用户创意拆成多镜头工作流蓝图（纯 LLM 规划，不调任何生成工具）。
+/// 输入 data.idea（创意文本），输出 {blueprint: "<JSON文本>"}，由前端解析为画布 DAG。
+fn plan_workflow(data: &Value) -> PackageResult {
+    let idea = data.get("idea").and_then(|v| v.as_str()).unwrap_or("").trim();
+    if idea.is_empty() {
+        return PackageResult::err("plan_workflow requires data.idea");
+    }
+
+    let body = match serde_json::to_string(&ChatCompletionRequest {
+        model: "deepseek-chat",
+        messages: vec![
+            ChatMessage {
+                role: "system",
+                content: DIRECTOR_WORKFLOW_SYSTEM_PROMPT,
+            },
+            ChatMessage {
+                role: "user",
+                content: idea,
+            },
+        ],
+        temperature: 0.7,
+    }) {
+        Ok(value) => value,
+        Err(error) => return PackageResult::err(format!("failed to build chat request: {}", error)),
+    };
+
+    let response_text = match chat_completion("ai-director:workflow", "", &body) {
+        Ok(value) => value,
+        Err(error) => return PackageResult::err(error),
+    };
+
+    let response: ChatCompletionResponse = match serde_json::from_str(&response_text) {
+        Ok(value) => value,
+        Err(error) => return PackageResult::err(format!("failed to parse chat response: {}", error)),
+    };
+
+    let blueprint = match response.choices.first() {
+        Some(choice) if !choice.message.content.trim().is_empty() => choice.message.content.clone(),
+        _ => return PackageResult::err("chat response missing choices[0].message.content"),
+    };
+
+    PackageResult::ok(serde_json::json!({
+        "blueprint": blueprint,
         "raw_usage": response.usage,
     }))
 }

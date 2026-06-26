@@ -22,7 +22,7 @@ powershell -ExecutionPolicy Bypass -File .\run-managed-weft-core.ps1
 
 Expected result:
 
-- WEFT-core listens on `127.0.0.1:3004`
+- WEFT-core listens on `127.0.0.1:17830`
 - `tool-runtime-core` is discoverable from `runtime-root/plugins/official/tool-runtime-core/`
 
 Expected log:
@@ -63,7 +63,7 @@ py -3 -c "import json, urllib.request; opener=urllib.request.build_opener(urllib
 
 ## Run task with real WEFT tool bridge
 
-Requires WEFT-core to be running locally on `127.0.0.1:3004`.
+Requires WEFT-core to be running locally on `127.0.0.1:17830`.
 
 ```powershell
 py -3 -c "import json, urllib.request; opener=urllib.request.build_opener(urllib.request.ProxyHandler({})); req=urllib.request.Request('http://127.0.0.1:43133/webhook', data=json.dumps({'action':'run_task','data':{'task':'Read README through WEFT tool bridge','tool':'fs_read','args':{'path':'D:\\\\weft-workspace\\\\weft-plugins\\\\generic-agent-runtime\\\\README.md'}}}).encode(), headers={'Content-Type':'application/json'}); print(opener.open(req, timeout=5).read().decode())"
@@ -72,7 +72,7 @@ py -3 -c "import json, urllib.request; opener=urllib.request.build_opener(urllib
 ### Current local bridge setup
 
 The local managed runtime root is configured to launch WEFT-core on
-`127.0.0.1:3004` and expose `tool-runtime-core` from:
+`127.0.0.1:17830` and expose `tool-runtime-core` from:
 
 - `runtime-root/plugins/official/tool-runtime-core/`
 

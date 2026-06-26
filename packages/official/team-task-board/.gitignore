@@ -1,0 +1,4 @@
+/target
+/.omc
+*.wasm
+Cargo.lock

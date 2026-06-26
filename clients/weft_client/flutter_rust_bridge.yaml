@@ -1,0 +1,6 @@
+# flutter_rust_bridge v2 配置
+# codegen 扫描 rust_input 生成 Dart 绑定到 dart_output。
+
+rust_input: crate::ffi
+rust_root: ./core/
+dart_output: ./clients/weft_client/lib/core/transport/frb_generated/

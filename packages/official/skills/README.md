@@ -37,7 +37,7 @@ Skills are defined using JSON Schema:
 
 ## WebSocket API
 
-Connect to `ws://localhost:3004/ws/plugins/skills`
+Connect to `ws://localhost:17830/ws/plugins/skills`
 
 ### Actions
 
