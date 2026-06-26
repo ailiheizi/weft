@@ -16,6 +16,7 @@ import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/hover_card.dart';
 import 'ai_director_mock.dart';
 import 'ai_director_timeline_painter.dart';
+import 'canvas/hub_canvas_view.dart';
 
 const _uuid = Uuid();
 
@@ -44,6 +45,9 @@ class _AiDirectorWorkbenchScreenState
   double _previewSecond = 12;
   double _videoDurationSecond = 0;
   bool _isPlaying = false;
+
+  /// Hub 画布视图（默认）↔ 经典视图（旧 mock 时间线）。
+  bool _hubView = true;
   String? _importedVideoPath;
   bool _generatingPlan = false;
   String? _aiPlanText;

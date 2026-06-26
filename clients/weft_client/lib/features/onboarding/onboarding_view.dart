@@ -2,63 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/provider.dart';
+import '../../core/models/provider_presets.dart';
 import '../../core/providers/core_repository.dart';
 import '../../core/providers/data_providers.dart';
 import '../../core/providers/preferences_provider.dart';
-
-/// A built-in provider preset shown on the OOBE provider step.
-class _ProviderPreset {
-  const _ProviderPreset({
-    required this.name,
-    required this.baseUrl,
-    required this.format,
-    required this.defaultModel,
-    required this.keyHint,
-    this.docsUrl,
-  });
-
-  final String name;
-  final String baseUrl;
-  final String format; // 'openai' | 'anthropic'
-  final String defaultModel;
-  final String keyHint;
-  final String? docsUrl;
-}
-
-const _presets = <_ProviderPreset>[
-  _ProviderPreset(
-    name: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com',
-    format: 'openai',
-    defaultModel: 'deepseek-chat',
-    keyHint: 'sk-...',
-    docsUrl: 'https://platform.deepseek.com/api_keys',
-  ),
-  _ProviderPreset(
-    name: 'OpenAI',
-    baseUrl: 'https://api.openai.com/v1',
-    format: 'openai',
-    defaultModel: 'gpt-4o',
-    keyHint: 'sk-...',
-    docsUrl: 'https://platform.openai.com/api-keys',
-  ),
-  _ProviderPreset(
-    name: 'OpenRouter',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    format: 'openai',
-    defaultModel: 'openai/gpt-4o',
-    keyHint: 'sk-or-...',
-    docsUrl: 'https://openrouter.ai/keys',
-  ),
-  _ProviderPreset(
-    name: 'Anthropic',
-    baseUrl: 'https://api.anthropic.com',
-    format: 'anthropic',
-    defaultModel: 'claude-sonnet-4-20250514',
-    keyHint: 'sk-ant-...',
-    docsUrl: 'https://console.anthropic.com/settings/keys',
-  ),
-];
 
 /// Full-screen first-run onboarding (OOBE).
 ///
@@ -77,9 +24,9 @@ class OnboardingView extends ConsumerStatefulWidget {
 
 class _OnboardingViewState extends ConsumerState<OnboardingView> {
   int _step = 0; // 0 = welcome, 1 = provider
-  _ProviderPreset _selected = _presets.first;
+  ProviderPreset _selected = kProviderPresets.first;
   final _keyCtrl = TextEditingController();
-  final _modelCtrl = TextEditingController(text: _presets.first.defaultModel);
+  final _modelCtrl = TextEditingController(text: kProviderPresets.first.defaultModel);
   bool _saving = false;
   String? _error;
 
@@ -90,7 +37,7 @@ class _OnboardingViewState extends ConsumerState<OnboardingView> {
     super.dispose();
   }
 
-  void _pick(_ProviderPreset p) {
+  void _pick(ProviderPreset p) {
     setState(() {
       _selected = p;
       _modelCtrl.text = p.defaultModel;
@@ -223,7 +170,7 @@ class _OnboardingViewState extends ConsumerState<OnboardingView> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: _presets.map((p) {
+          children: kProviderPresets.map((p) {
             final selected = p.name == _selected.name;
             return ChoiceChip(
               label: Text(p.name),

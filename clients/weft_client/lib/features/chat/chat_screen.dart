@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -74,6 +75,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     _scrollToBottom();
   }
 
+  Future<void> _newChat() async {
+    final meta = await ref.read(sessionsProvider.notifier).createSession();
+    ref.read(activeSessionIdProvider.notifier).state = meta.id;
+  }
+
   @override
   Widget build(BuildContext context) {
     final activeSessionId = ref.watch(activeSessionIdProvider);
@@ -90,7 +96,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       });
     }
 
-    return Row(
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyN, control: true): _newChat,
+      },
+      child: Row(
       children: [
         // ── 左侧 session 列表 ──────────────────────────────────────────────
         _SessionSidebar(
@@ -98,11 +108,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           onSelectSession: (id) {
             ref.read(activeSessionIdProvider.notifier).state = id;
           },
-          onNewChat: () async {
-            final meta =
-                await ref.read(sessionsProvider.notifier).createSession();
-            ref.read(activeSessionIdProvider.notifier).state = meta.id;
-          },
+          onNewChat: _newChat,
         ),
         const VerticalDivider(width: 1),
         // ── 中间聊天区域 ───────────────────────────────────────────────────
@@ -130,6 +136,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           ),
         ],
       ],
+    ),
     );
   }
 }
@@ -334,6 +341,16 @@ class _ChatArea extends ConsumerWidget {
   final VoidCallback onStop;
   final VoidCallback scrollToBottom;
 
+  /// 最近一条用户消息文本（供输入框 ↑ 键调出重新编辑）。
+  String? _lastUserText(List<ChatMessage> messages) {
+    for (final m in messages.reversed) {
+      if (m.role == 'user' && m.content.trim().isNotEmpty) {
+        return m.content.trim();
+      }
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(chatProvider(sessionId));
@@ -366,6 +383,7 @@ class _ChatArea extends ConsumerWidget {
           isStreaming: session.isStreaming,
           onSend: onSend,
           onStop: onStop,
+          lastUserMessage: _lastUserText(session.messages),
           disabledHint:
               noProviders ? 'Add an AI provider in Settings to start chatting' : null,
         ),
@@ -1153,12 +1171,18 @@ class _NoProviderState extends StatelessWidget {
 
 // ─── 底部输入栏 ───────────────────────────────────────────────────────────────
 
-class _InputBar extends StatelessWidget {
+/// 可用的斜杠指令(输入 / 时弹出)。
+const _slashCommands = [
+  (cmd: '/team', desc: '强制组建多 agent 团队完成复杂任务'),
+];
+
+class _InputBar extends StatefulWidget {
   const _InputBar({
     required this.controller,
     required this.isStreaming,
     required this.onSend,
     required this.onStop,
+    this.lastUserMessage,
     this.disabledHint,
   });
 
@@ -1167,60 +1191,202 @@ class _InputBar extends StatelessWidget {
   final VoidCallback onSend;
   final VoidCallback onStop;
 
+  /// 最近一条用户消息(输入框为空时按 ↑ 调出重新编辑)。
+  final String? lastUserMessage;
+
   /// When set, the composer is disabled and this hint explains why
   /// (e.g. no provider configured yet).
   final String? disabledHint;
 
   @override
+  State<_InputBar> createState() => _InputBarState();
+}
+
+class _InputBarState extends State<_InputBar> {
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onTextChanged);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onTextChanged() {
+    // 重建以驱动斜杠菜单的显示/过滤。
+    if (mounted) setState(() {});
+  }
+
+  /// 当前是否应显示斜杠菜单 + 匹配的指令。
+  List<({String cmd, String desc})> get _matchingSlash {
+    final text = widget.controller.text;
+    if (!text.startsWith('/')) return const [];
+    // 仅当还在输入指令本身(没有空格)时显示;输入了参数就收起。
+    if (text.contains(' ') || text.contains('\n')) return const [];
+    final q = text.toLowerCase();
+    return _slashCommands
+        .where((c) => c.cmd.startsWith(q))
+        .toList();
+  }
+
+  void _applySlash(String cmd) {
+    widget.controller.text = '$cmd ';
+    widget.controller.selection = TextSelection.collapsed(
+      offset: widget.controller.text.length,
+    );
+    _focusNode.requestFocus();
+  }
+
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final isEnter = event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter;
+    final shift = HardwareKeyboard.instance.isShiftPressed;
+    final slash = _matchingSlash;
+
+    // 斜杠菜单可见时,Enter 选中唯一/第一个指令。
+    if (slash.isNotEmpty && isEnter && !shift) {
+      _applySlash(slash.first.cmd);
+      return KeyEventResult.handled;
+    }
+    // Enter 发送(Shift+Enter 换行,交给 TextField 默认处理)。
+    if (isEnter && !shift) {
+      widget.onSend();
+      return KeyEventResult.handled;
+    }
+    // 输入框为空时,↑ 调出上一条用户消息重新编辑。
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
+        widget.controller.text.isEmpty &&
+        (widget.lastUserMessage?.isNotEmpty ?? false)) {
+      widget.controller.text = widget.lastUserMessage!;
+      widget.controller.selection = TextSelection.collapsed(
+        offset: widget.controller.text.length,
+      );
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final disabled = disabledHint != null;
-    final inputDisabled = isStreaming || disabled;
+    final disabled = widget.disabledHint != null;
+    final inputDisabled = widget.isStreaming || disabled;
+    final slash = inputDisabled ? const <({String cmd, String desc})>[] : _matchingSlash;
 
     return Padding(
       padding: const EdgeInsets.all(12),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: TextField(
-              controller: controller,
-              enabled: !inputDisabled,
-              maxLines: null,
-              keyboardType: TextInputType.multiline,
-              textInputAction: TextInputAction.newline,
-              decoration: InputDecoration(
-                hintText: disabled
-                    ? disabledHint
-                    : isStreaming
-                        ? 'Generating…'
-                        : 'Type a message…  (/team 强制组建团队)',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: theme.colorScheme.outline),
+          if (slash.isNotEmpty) _SlashMenu(items: slash, onPick: _applySlash),
+          Row(
+            children: [
+              Expanded(
+                child: Focus(
+                  focusNode: _focusNode,
+                  onKeyEvent: inputDisabled ? null : _handleKey,
+                  child: TextField(
+                    controller: widget.controller,
+                    enabled: !inputDisabled,
+                    maxLines: null,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    decoration: InputDecoration(
+                      hintText: disabled
+                          ? widget.disabledHint
+                          : widget.isStreaming
+                              ? 'Generating…'
+                              : '输入消息…  Enter 发送 · Shift+Enter 换行 · / 指令',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: theme.colorScheme.outline),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      isDense: true,
+                    ),
+                  ),
                 ),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 10),
-                isDense: true,
               ),
-              onSubmitted: inputDisabled ? null : (_) => onSend(),
-            ),
+              const SizedBox(width: 8),
+              if (widget.isStreaming)
+                IconButton.filled(
+                  onPressed: widget.onStop,
+                  icon: const Icon(Icons.stop_rounded),
+                  tooltip: 'Stop',
+                  style: IconButton.styleFrom(
+                    backgroundColor: theme.colorScheme.error,
+                    foregroundColor: theme.colorScheme.onError,
+                  ),
+                )
+              else
+                IconButton.filled(
+                  onPressed: disabled ? null : widget.onSend,
+                  icon: const Icon(Icons.send_rounded),
+                  tooltip: 'Send',
+                ),
+            ],
           ),
-          const SizedBox(width: 8),
-          if (isStreaming)
-            IconButton.filled(
-              onPressed: onStop,
-              icon: const Icon(Icons.stop_rounded),
-              tooltip: 'Stop',
-              style: IconButton.styleFrom(
-                backgroundColor: theme.colorScheme.error,
-                foregroundColor: theme.colorScheme.onError,
+        ],
+      ),
+    );
+  }
+}
+
+/// 斜杠指令弹出菜单(输入框上方)。
+class _SlashMenu extends StatelessWidget {
+  const _SlashMenu({required this.items, required this.onPick});
+
+  final List<({String cmd, String desc})> items;
+  final void Function(String cmd) onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final it in items)
+            InkWell(
+              onTap: () => onPick(it.cmd),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  children: [
+                    Icon(Icons.groups_outlined,
+                        size: 18, color: theme.colorScheme.primary),
+                    const SizedBox(width: 10),
+                    Text(it.cmd,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'monospace')),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(it.desc,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant),
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                ),
               ),
-            )
-          else
-            IconButton.filled(
-              onPressed: disabled ? null : onSend,
-              icon: const Icon(Icons.send_rounded),
-              tooltip: 'Send',
             ),
         ],
       ),

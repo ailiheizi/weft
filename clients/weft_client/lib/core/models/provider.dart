@@ -20,7 +20,8 @@ abstract class ProviderConfig with _$ProviderConfig {
 @freezed
 abstract class ApiKeyConfig with _$ApiKeyConfig {
   const factory ApiKeyConfig({
-    required String key,
+    // The core API serializes the secret under "value", not "key".
+    @JsonKey(name: 'value') required String key,
     String? label,
     @Default(true) bool enabled,
   }) = _ApiKeyConfig;

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers/data_providers.dart';
 import '../../core/providers/core_repository.dart';
 import '../../core/models/provider.dart';
+import '../../core/models/provider_presets.dart';
 import '../../shared/widgets/skeleton.dart';
 import '../../shared/widgets/hover_card.dart';
 import '../../shared/widgets/empty_state.dart';
@@ -231,6 +232,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   late String _format = widget.existing?.format ?? 'openai';
   late final List<_KeyEntry> _keys;
   bool _saving = false;
+  String? _error;
 
   @override
   void initState() {
@@ -264,6 +266,26 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         width: 480,
         child: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
+            if (widget.existing == null) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Quick start with a preset',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: kProviderPresets.map((p) {
+                  return ActionChip(
+                    label: Text(p.name),
+                    onPressed: () => _applyPreset(p),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+            ],
             TextField(
               controller: _nameCtrl,
               decoration: const InputDecoration(labelText: 'Name'),
@@ -388,6 +410,17 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                 onPressed: () => setState(() => _keys.add(_KeyEntry())),
               ),
             ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _error!,
+                  style: TextStyle(
+                      color: theme.colorScheme.error, fontSize: 13),
+                ),
+              ),
+            ],
           ]),
         ),
       ),
@@ -409,8 +442,21 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     );
   }
 
+  void _applyPreset(ProviderPreset p) {
+    setState(() {
+      if (_nameCtrl.text.trim().isEmpty) _nameCtrl.text = p.name;
+      _urlCtrl.text = p.baseUrl;
+      _modelsCtrl.text = p.defaultModel;
+      _format = p.format;
+      _error = null;
+    });
+  }
+
   Future<void> _save() async {
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     final models = _modelsCtrl.text
         .split(',')
         .map((s) => s.trim())
@@ -433,7 +479,18 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       models: models,
       keys: keys,
     );
-    await widget.onSave(config);
-    if (mounted) Navigator.pop(context);
+    try {
+      await widget.onSave(config);
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      // Don't leave the dialog spinning forever on a failed save — surface the
+      // error and let the user retry.
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = 'Save failed: $e';
+        });
+      }
+    }
   }
 }

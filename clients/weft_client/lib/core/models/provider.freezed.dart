@@ -302,7 +302,8 @@ as List<ApiKeyConfig>,
 /// @nodoc
 mixin _$ApiKeyConfig {
 
- String get key; String? get label; bool get enabled;
+// The core API serializes the secret under "value", not "key".
+@JsonKey(name: 'value') String get key; String? get label; bool get enabled;
 /// Create a copy of ApiKeyConfig
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -335,7 +336,7 @@ abstract mixin class $ApiKeyConfigCopyWith<$Res>  {
   factory $ApiKeyConfigCopyWith(ApiKeyConfig value, $Res Function(ApiKeyConfig) _then) = _$ApiKeyConfigCopyWithImpl;
 @useResult
 $Res call({
- String key, String? label, bool enabled
+@JsonKey(name: 'value') String key, String? label, bool enabled
 });
 
 
@@ -442,7 +443,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String key,  String? label,  bool enabled)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'value')  String key,  String? label,  bool enabled)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ApiKeyConfig() when $default != null:
 return $default(_that.key,_that.label,_that.enabled);case _:
@@ -463,7 +464,7 @@ return $default(_that.key,_that.label,_that.enabled);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String key,  String? label,  bool enabled)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'value')  String key,  String? label,  bool enabled)  $default,) {final _that = this;
 switch (_that) {
 case _ApiKeyConfig():
 return $default(_that.key,_that.label,_that.enabled);case _:
@@ -483,7 +484,7 @@ return $default(_that.key,_that.label,_that.enabled);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String key,  String? label,  bool enabled)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'value')  String key,  String? label,  bool enabled)?  $default,) {final _that = this;
 switch (_that) {
 case _ApiKeyConfig() when $default != null:
 return $default(_that.key,_that.label,_that.enabled);case _:
@@ -498,10 +499,11 @@ return $default(_that.key,_that.label,_that.enabled);case _:
 @JsonSerializable()
 
 class _ApiKeyConfig implements ApiKeyConfig {
-  const _ApiKeyConfig({required this.key, this.label, this.enabled = true});
+  const _ApiKeyConfig({@JsonKey(name: 'value') required this.key, this.label, this.enabled = true});
   factory _ApiKeyConfig.fromJson(Map<String, dynamic> json) => _$ApiKeyConfigFromJson(json);
 
-@override final  String key;
+// The core API serializes the secret under "value", not "key".
+@override@JsonKey(name: 'value') final  String key;
 @override final  String? label;
 @override@JsonKey() final  bool enabled;
 
@@ -538,7 +540,7 @@ abstract mixin class _$ApiKeyConfigCopyWith<$Res> implements $ApiKeyConfigCopyWi
   factory _$ApiKeyConfigCopyWith(_ApiKeyConfig value, $Res Function(_ApiKeyConfig) _then) = __$ApiKeyConfigCopyWithImpl;
 @override @useResult
 $Res call({
- String key, String? label, bool enabled
+@JsonKey(name: 'value') String key, String? label, bool enabled
 });
 
 

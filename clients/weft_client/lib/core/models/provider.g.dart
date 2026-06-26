@@ -34,14 +34,14 @@ Map<String, dynamic> _$ProviderConfigToJson(_ProviderConfig instance) =>
 
 _ApiKeyConfig _$ApiKeyConfigFromJson(Map<String, dynamic> json) =>
     _ApiKeyConfig(
-      key: json['key'] as String,
+      key: json['value'] as String,
       label: json['label'] as String?,
       enabled: json['enabled'] as bool? ?? true,
     );
 
 Map<String, dynamic> _$ApiKeyConfigToJson(_ApiKeyConfig instance) =>
     <String, dynamic>{
-      'key': instance.key,
+      'value': instance.key,
       'label': instance.label,
       'enabled': instance.enabled,
     };
