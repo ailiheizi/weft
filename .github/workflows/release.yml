@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write   # needed to create the GitHub Release
 
+# Avoid overlapping runs if a tag is re-pushed; let the newest win.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -167,6 +172,9 @@ jobs:
   release:
     name: publish release
     needs: [core, packages, app-windows]
+    # Only publish for real tag pushes. A manual workflow_dispatch can still run
+    # the build jobs above for testing, but has no tag for the release to attach to.
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
