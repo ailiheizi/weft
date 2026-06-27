@@ -149,16 +149,44 @@ jobs:
           for b in weft weft-sign weft-rpc; do
             [ -f "core/target/x86_64-pc-windows-msvc/release/$b.exe" ] && cp "core/target/x86_64-pc-windows-msvc/release/$b.exe" "$bundle"/ || true
           done
-          # Package metadata + compiled wasm so the core can load packages.
+          # Package metadata, compiled wasm, product declarations, and service
+          # assets so the core can load packages AND discover product apps.
           mkdir -p "$bundle/packages"
           cp packages/index.toml "$bundle/packages"/ 2>/dev/null || true
+
+          # 1) Product packages (root-level in packages/ — these define apps).
+          for d in packages/*/; do
+            name=$(basename "$d")
+            [[ "$name" == "official" || "$name" == "sdk" || "$name" == "installed" ]] && continue
+            [ -f "$d/package.toml" ] || continue
+            cp -r "$d" "$bundle/packages/$name"
+            # Remove build artifacts that shouldn't ship.
+            rm -rf "$bundle/packages/$name/target" "$bundle/packages/$name/src" \
+                   "$bundle/packages/$name/Cargo.toml" "$bundle/packages/$name/.gitignore"
+          done
+
+          # 2) Official packages — copy all that have a manifest (not just wasm).
           for d in packages/official/*/; do
             name=$(basename "$d")
-            if [ -f "$d/package.wasm" ]; then
-              mkdir -p "$bundle/packages/official/$name"
-              cp "$d/package.toml" "$bundle/packages/official/$name"/ 2>/dev/null || true
-              cp "$d/package.wasm" "$bundle/packages/official/$name"/
-            fi
+            [ -f "$d/package.toml" ] || continue
+            mkdir -p "$bundle/packages/official/$name"
+            cp "$d/package.toml" "$bundle/packages/official/$name"/
+            # Compiled wasm (if built by the WASM step above).
+            [ -f "$d/package.wasm" ] && cp "$d/package.wasm" "$bundle/packages/official/$name"/
+            # UI assets for packages that serve web interfaces.
+            [ -d "$d/ui" ] && cp -r "$d/ui" "$bundle/packages/official/$name"/
+            # Service runtime assets (Python/JS services, skill definitions).
+            [ -d "$d/service" ] && cp -r "$d/service" "$bundle/packages/official/$name"/
+            [ -d "$d/hermes_port" ] && cp -r "$d/hermes_port" "$bundle/packages/official/$name"/
+            [ -d "$d/ga_runtime" ] && cp -r "$d/ga_runtime" "$bundle/packages/official/$name"/
+            [ -f "$d/server.py" ] && cp "$d/server.py" "$bundle/packages/official/$name"/
+            # Scenes (capability scenarios).
+            [ -d "$d/scenes" ] && cp -r "$d/scenes" "$bundle/packages/official/$name"/
+            # Remove build artifacts that shouldn't ship.
+            rm -rf "$bundle/packages/official/$name/target" \
+                   "$bundle/packages/official/$name/src" \
+                   "$bundle/packages/official/$name/Cargo.toml" \
+                   "$bundle/packages/official/$name/.gitignore"
           done
           cp config.example.toml "$bundle"/ 2>/dev/null || true
           7z a "$bundle.zip" "./$bundle/*"
