@@ -20,6 +20,12 @@ pub fn set_global_router(router: Router) {
     let _ = ROUTER.set(router);
 }
 
+/// 进程内就绪检查:ROUTER 已注册即表示 FFI dispatch 可用(与 HTTP listener 无关)。
+/// FFI start_core 用它判断就绪,取代依赖 HTTP health 的脆弱探测。
+pub fn router_ready() -> bool {
+    ROUTER.get().is_some()
+}
+
 #[derive(Debug, Deserialize)]
 pub struct RequestEnvelope {
     pub id: String,

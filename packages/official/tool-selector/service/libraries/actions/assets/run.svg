@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400" width="200" height="400">
+  <!-- Stick Figure: Run (leaning forward, legs wide) -->
+  <!-- Head -->
+  <circle cx="105" cy="55" r="25" stroke="black" stroke-width="8" fill="white"/>
+  <!-- Body (leaning forward) -->
+  <line x1="105" y1="80" x2="90" y2="210" stroke="black" stroke-width="8"/>
+  <!-- Left arm (pumping back) -->
+  <line x1="93" y1="120" x2="120" y2="140" stroke="black" stroke-width="8"/>
+  <line x1="120" y1="140" x2="135" y2="120" stroke="black" stroke-width="8"/>
+  <!-- Right arm (pumping forward) -->
+  <line x1="93" y1="120" x2="60" y2="130" stroke="black" stroke-width="8"/>
+  <line x1="60" y1="130" x2="50" y2="110" stroke="black" stroke-width="8"/>
+  <!-- Left leg (back, extended far behind) -->
+  <line x1="90" y1="210" x2="140" y2="260" stroke="black" stroke-width="8"/>
+  <line x1="140" y1="260" x2="160" y2="320" stroke="black" stroke-width="8"/>
+  <!-- Right leg (front, extended forward) -->
+  <line x1="90" y1="210" x2="55" y2="270" stroke="black" stroke-width="8"/>
+  <line x1="55" y1="270" x2="40" y2="340" stroke="black" stroke-width="8"/>
+  <!-- Feet -->
+  <line x1="160" y1="320" x2="170" y2="315" stroke="black" stroke-width="8" stroke-linecap="round"/>
+  <line x1="40" y1="340" x2="28" y2="340" stroke="black" stroke-width="8" stroke-linecap="round"/>
+  <!-- Speed lines behind -->
+  <line x1="155" y1="150" x2="185" y2="150" stroke="black" stroke-width="3" stroke-linecap="round"/>
+  <line x1="150" y1="170" x2="190" y2="170" stroke="black" stroke-width="3" stroke-linecap="round"/>
+  <line x1="155" y1="190" x2="185" y2="190" stroke="black" stroke-width="3" stroke-linecap="round"/>
+</svg>

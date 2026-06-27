@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <!-- Wall -->
+  <rect x="0" y="0" width="1280" height="720" fill="#FFF8E1"/>
+  <!-- Floor -->
+  <rect x="0" y="580" width="1280" height="140" fill="#BCAAA4"/>
+  <!-- Chalkboard -->
+  <rect x="200" y="60" width="700" height="350" fill="#2E7D32" stroke="#5D4037" stroke-width="8"/>
+  <!-- Chalk writing -->
+  <text x="280" y="150" font-family="serif" font-size="36" fill="#E8F5E9" opacity="0.9">E = mc²</text>
+  <text x="280" y="220" font-family="serif" font-size="28" fill="#E8F5E9" opacity="0.8">Hello World!</text>
+  <line x1="280" y1="270" x2="700" y2="270" stroke="#E8F5E9" stroke-width="2" opacity="0.6"/>
+  <line x1="280" y1="310" x2="650" y2="310" stroke="#E8F5E9" stroke-width="2" opacity="0.6"/>
+  <line x1="280" y1="350" x2="600" y2="350" stroke="#E8F5E9" stroke-width="2" opacity="0.6"/>
+  <!-- Chalk tray -->
+  <rect x="200" y="410" width="700" height="15" fill="#5D4037"/>
+  <!-- Window -->
+  <rect x="1020" y="80" width="200" height="280" fill="#87CEEB" stroke="#5D4037" stroke-width="4"/>
+  <line x1="1120" y1="80" x2="1120" y2="360" stroke="#5D4037" stroke-width="3"/>
+  <line x1="1020" y1="220" x2="1220" y2="220" stroke="#5D4037" stroke-width="3"/>
+  <!-- Desks row 1 -->
+  <rect x="150" y="500" width="160" height="50" fill="#8D6E63" rx="3"/>
+  <rect x="155" y="550" width="10" height="30" fill="#6D4C41"/>
+  <rect x="295" y="550" width="10" height="30" fill="#6D4C41"/>
+  <rect x="400" y="500" width="160" height="50" fill="#8D6E63" rx="3"/>
+  <rect x="405" y="550" width="10" height="30" fill="#6D4C41"/>
+  <rect x="545" y="550" width="10" height="30" fill="#6D4C41"/>
+  <rect x="650" y="500" width="160" height="50" fill="#8D6E63" rx="3"/>
+  <rect x="655" y="550" width="10" height="30" fill="#6D4C41"/>
+  <rect x="795" y="550" width="10" height="30" fill="#6D4C41"/>
+  <rect x="900" y="500" width="160" height="50" fill="#8D6E63" rx="3"/>
+  <rect x="905" y="550" width="10" height="30" fill="#6D4C41"/>
+  <rect x="1045" y="550" width="10" height="30" fill="#6D4C41"/>
+  <!-- Teacher desk -->
+  <rect x="450" y="440" width="200" height="40" fill="#6D4C41" rx="3"/>
+  <!-- Clock -->
+  <circle cx="100" cy="120" r="35" fill="#FFFFFF" stroke="#333333" stroke-width="2"/>
+  <line x1="100" y1="120" x2="100" y2="95" stroke="#333333" stroke-width="2"/>
+  <line x1="100" y1="120" x2="115" y2="120" stroke="#333333" stroke-width="1.5"/>
+</svg>

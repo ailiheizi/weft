@@ -1,0 +1,15 @@
+{"id": "expr_happy", "name": "开心", "description": "开心 高兴 笑 微笑 快乐 喜悦 哈哈 笑死了 笑得停不下来 如释重负 轻松 太好了 搞笑", "tags": ["正面"], "asset_path": "assets/happy.svg"}
+{"id": "expr_angry", "name": "愤怒", "description": "愤怒 生气 发火 暴怒 怒目 气炸了 气得不行 太气了 火大 受不了 凭什么", "tags": ["负面"], "asset_path": "assets/angry.svg"}
+{"id": "expr_sad", "name": "悲伤", "description": "悲伤 难过 哭泣 委屈 流泪 伤心", "tags": ["负面"], "asset_path": "assets/sad.svg"}
+{"id": "expr_surprise", "name": "惊讶", "description": "惊讶 震惊 吃惊 什么 不敢相信 目瞪口呆 天哪", "tags": ["中性"], "asset_path": "assets/surprise.svg"}
+{"id": "expr_confused", "name": "困惑", "description": "困惑 疑惑 不理解 看不懂 问号脸 一脸懵", "tags": ["中性"], "asset_path": "assets/confused.svg"}
+{"id": "expr_smirk", "name": "坏笑", "description": "坏笑 奸笑 得意 阴险 嘿嘿 邪魅一笑", "tags": ["中性"], "asset_path": "assets/smirk.svg"}
+{"id": "expr_cry", "name": "大哭", "description": "大哭 嚎啕大哭 崩溃 太惨了 受不了了 痛哭", "tags": ["负面"], "asset_path": "assets/cry.svg"}
+{"id": "expr_cool", "name": "墨镜酷", "description": "戴墨镜 酷 帅 淡定 无所谓 就这样吧", "tags": ["正面"], "asset_path": "assets/cool.svg"}
+{"id": "expr_scared", "name": "害怕", "description": "害怕 恐惧 吓到了 瑟瑟发抖 可怕 救命", "tags": ["负面"], "asset_path": "assets/scared.svg"}
+{"id": "expr_bored", "name": "无聊", "description": "无聊 无趣 困了 打哈欠 好无聊 提不起兴趣", "tags": ["中性"], "asset_path": "assets/bored.svg"}
+{"id": "expr_thinking", "name": "思考", "description": "思考 想问题 嗯 考虑一下 动脑 犹豫不决 脑子在转", "tags": ["中性"], "asset_path": "assets/thinking.svg"}
+{"id": "expr_mind_blown", "name": "震惊爆炸", "description": "脑子炸了 太震惊了 不可思议 三观碎裂 信息量太大", "tags": ["负面"], "asset_path": "assets/mind_blown.svg"}
+{"id": "expr_fire", "name": "燃", "description": "燃起来了 热血 激动 太棒了 绝了 燃爆 passion fire", "tags": ["正面"], "asset_path": "assets/fire.svg"}
+{"id": "expr_sleep", "name": "困", "description": "困了 想睡觉 打瞌睡 昏昏欲睡 好困 zzz 哈欠 睁不开眼 犯困", "tags": ["中性"], "asset_path": "assets/sleep.svg"}
+{"id": "expr_vomit", "name": "恶心", "description": "恶心 想吐 受不了 太恶心了 呕 难以忍受", "tags": ["负面"], "asset_path": "assets/vomit.svg"}

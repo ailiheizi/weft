@@ -1,0 +1,12 @@
+{"id": "action_wave", "name": "挥手打招呼", "description": "角色站立 右手举起左右挥动 友好打招呼 嗨 你好 挥手", "tags": ["友好", "打招呼"], "asset_path": "assets/wave.svg"}
+{"id": "action_shrug", "name": "摊手耸肩", "description": "角色双手摊开 肩膀上耸 表示无奈 不知道 没办法 耸肩 摊手 又来了 无语摊手", "tags": ["无奈", "不知道"], "asset_path": "assets/shrug.svg"}
+{"id": "action_walk", "name": "向前走", "description": "角色正常步行向前移动 走路 行走 前进", "tags": ["移动", "走路"], "asset_path": "assets/walk.svg"}
+{"id": "action_run", "name": "跑步", "description": "角色快速奔跑 冲刺 赶时间 跑起来 飞奔", "tags": ["移动", "跑步"], "asset_path": "assets/run.svg"}
+{"id": "action_sit", "name": "坐下", "description": "角色坐在椅子上 坐着 休息 安静坐好", "tags": ["静止", "坐"], "asset_path": "assets/sit.svg"}
+{"id": "action_jump", "name": "跳跃", "description": "角色高高跳起 跳跃 兴奋 开心得跳起来 蹦", "tags": ["兴奋", "跳"], "asset_path": "assets/jump.svg"}
+{"id": "action_point", "name": "指向前方", "description": "角色伸手指向前方 指着 看那里 注意 指示方向", "tags": ["指向", "注意"], "asset_path": "assets/point.svg"}
+{"id": "action_facepalm", "name": "捂脸", "description": "角色用手捂住脸 捂脸 无语 尴尬 受不了 太离谱了", "tags": ["无语", "尴尬"], "asset_path": "assets/facepalm.svg"}
+{"id": "action_dance", "name": "跳舞", "description": "角色欢快地跳舞 手舞足蹈 庆祝 开心 派对", "tags": ["开心", "庆祝"], "asset_path": "assets/dance.svg"}
+{"id": "action_think", "name": "思考", "description": "角色手托下巴思考 想问题 沉思 犹豫 嗯", "tags": ["思考", "犹豫"], "asset_path": "assets/think.svg"}
+{"id": "action_bow", "name": "鞠躬", "description": "角色弯腰鞠躬 道歉 感谢 拜托 请求", "tags": ["礼貌", "道歉"], "asset_path": "assets/bow.svg"}
+{"id": "action_fight", "name": "打拳", "description": "角色挥拳出击 打架 攻击 愤怒暴打 拳头", "tags": ["愤怒", "攻击"], "asset_path": "assets/fight.svg"}

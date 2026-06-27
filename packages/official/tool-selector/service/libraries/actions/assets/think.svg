@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400" width="200" height="400">
+  <!-- Stick Figure: Think (hand on chin, thought bubble) -->
+  <!-- Head -->
+  <circle cx="100" cy="60" r="25" stroke="black" stroke-width="8" fill="white"/>
+  <!-- Body -->
+  <line x1="100" y1="85" x2="100" y2="220" stroke="black" stroke-width="8"/>
+  <!-- Left arm (at side) -->
+  <line x1="100" y1="130" x2="135" y2="185" stroke="black" stroke-width="8"/>
+  <!-- Right arm (hand on chin - thinking) -->
+  <line x1="100" y1="130" x2="80" y2="115" stroke="black" stroke-width="8"/>
+  <line x1="80" y1="115" x2="88" y2="82" stroke="black" stroke-width="8"/>
+  <!-- Left leg -->
+  <line x1="100" y1="220" x2="70" y2="340" stroke="black" stroke-width="8"/>
+  <!-- Right leg -->
+  <line x1="100" y1="220" x2="130" y2="340" stroke="black" stroke-width="8"/>
+  <!-- Feet -->
+  <line x1="70" y1="340" x2="55" y2="340" stroke="black" stroke-width="8" stroke-linecap="round"/>
+  <line x1="130" y1="340" x2="145" y2="340" stroke="black" stroke-width="8" stroke-linecap="round"/>
+  <!-- Thought bubble -->
+  <circle cx="130" cy="28" r="18" stroke="black" stroke-width="3" fill="white"/>
+  <!-- Dots inside thought bubble -->
+  <circle cx="122" cy="28" r="3" fill="black"/>
+  <circle cx="130" cy="28" r="3" fill="black"/>
+  <circle cx="138" cy="28" r="3" fill="black"/>
+  <!-- Small connecting bubbles -->
+  <circle cx="115" cy="42" r="5" stroke="black" stroke-width="2" fill="white"/>
+  <circle cx="110" cy="52" r="3" stroke="black" stroke-width="2" fill="white"/>
+</svg>

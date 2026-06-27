@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <!-- Wall - warm orange tint -->
+  <rect x="0" y="0" width="1280" height="720" fill="#4A3728"/>
+  <!-- Warm lighting overlay -->
+  <rect x="0" y="0" width="1280" height="720" fill="#FF8C00" opacity="0.1"/>
+  <!-- Floor -->
+  <rect x="0" y="550" width="1280" height="170" fill="#3E2723"/>
+  <!-- Counter -->
+  <rect x="0" y="350" width="500" height="200" fill="#5D4037"/>
+  <rect x="0" y="340" width="520" height="15" fill="#4E342E"/>
+  <!-- Menu board -->
+  <rect x="100" y="60" width="300" height="200" fill="#1A1A1A" stroke="#5D4037" stroke-width="4"/>
+  <text x="150" y="110" font-family="sans-serif" font-size="24" fill="#FFFFFF">COFFEE</text>
+  <text x="150" y="145" font-family="sans-serif" font-size="16" fill="#CCCCCC">Espresso......$3</text>
+  <text x="150" y="175" font-family="sans-serif" font-size="16" fill="#CCCCCC">Latte.........$4</text>
+  <text x="150" y="205" font-family="sans-serif" font-size="16" fill="#CCCCCC">Cappuccino....$4</text>
+  <text x="150" y="235" font-family="sans-serif" font-size="16" fill="#CCCCCC">Mocha.........$5</text>
+  <!-- Coffee machine -->
+  <rect x="50" y="370" width="80" height="100" fill="#424242" rx="5"/>
+  <rect x="60" y="380" width="60" height="40" fill="#616161" rx="3"/>
+  <circle cx="90" cy="450" r="8" fill="#FF5722"/>
+  <!-- Cups on counter -->
+  <rect x="200" y="380" width="30" height="40" fill="#FFFFFF" rx="3"/>
+  <rect x="195" y="375" width="40" height="8" fill="#FFFFFF" rx="2"/>
+  <rect x="280" y="385" width="25" height="35" fill="#FFFFFF" rx="3"/>
+  <rect x="275" y="380" width="35" height="8" fill="#FFFFFF" rx="2"/>
+  <!-- Tables -->
+  <circle cx="700" cy="480" r="50" fill="#5D4037"/>
+  <rect x="695" y="530" width="10" height="60" fill="#4E342E"/>
+  <circle cx="950" cy="460" r="50" fill="#5D4037"/>
+  <rect x="945" y="510" width="10" height="60" fill="#4E342E"/>
+  <circle cx="1150" cy="500" r="45" fill="#5D4037"/>
+  <rect x="1145" y="545" width="10" height="55" fill="#4E342E"/>
+  <!-- Chairs -->
+  <rect x="630" y="470" width="30" height="40" fill="#795548" rx="5"/>
+  <rect x="740" y="470" width="30" height="40" fill="#795548" rx="5"/>
+  <rect x="880" y="450" width="30" height="40" fill="#795548" rx="5"/>
+  <rect x="990" y="450" width="30" height="40" fill="#795548" rx="5"/>
+  <!-- Pendant lights -->
+  <line x1="640" y1="0" x2="640" y2="200" stroke="#333333" stroke-width="2"/>
+  <polygon points="620,200 660,200 650,230 630,230" fill="#FF8C00" opacity="0.8"/>
+  <circle cx="640" cy="240" r="30" fill="#FFD700" opacity="0.2"/>
+  <line x1="900" y1="0" x2="900" y2="180" stroke="#333333" stroke-width="2"/>
+  <polygon points="880,180 920,180 910,210 890,210" fill="#FF8C00" opacity="0.8"/>
+  <circle cx="900" cy="220" r="30" fill="#FFD700" opacity="0.2"/>
+  <line x1="1120" y1="0" x2="1120" y2="210" stroke="#333333" stroke-width="2"/>
+  <polygon points="1100,210 1140,210 1130,240 1110,240" fill="#FF8C00" opacity="0.8"/>
+  <circle cx="1120" cy="250" r="30" fill="#FFD700" opacity="0.2"/>
+  <!-- Window -->
+  <rect x="600" y="60" width="250" height="250" fill="#1B2838" stroke="#5D4037" stroke-width="5"/>
+  <rect x="610" y="70" width="110" height="115" fill="#263238"/>
+  <rect x="730" y="70" width="110" height="115" fill="#263238"/>
+  <rect x="610" y="195" width="110" height="105" fill="#263238"/>
+  <rect x="730" y="195" width="110" height="105" fill="#263238"/>
+</svg>

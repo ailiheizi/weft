@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <!-- Sky -->
+  <rect x="0" y="0" width="1280" height="400" fill="#87CEEB"/>
+  <!-- Clouds -->
+  <circle cx="200" cy="100" r="40" fill="#FFFFFF"/>
+  <circle cx="240" cy="90" r="50" fill="#FFFFFF"/>
+  <circle cx="280" cy="100" r="35" fill="#FFFFFF"/>
+  <circle cx="800" cy="130" r="35" fill="#FFFFFF"/>
+  <circle cx="840" cy="120" r="45" fill="#FFFFFF"/>
+  <circle cx="880" cy="130" r="30" fill="#FFFFFF"/>
+  <circle cx="1100" cy="80" r="30" fill="#FFFFFF"/>
+  <circle cx="1130" cy="70" r="40" fill="#FFFFFF"/>
+  <circle cx="1160" cy="80" r="28" fill="#FFFFFF"/>
+  <!-- Buildings background -->
+  <rect x="50" y="200" width="150" height="200" fill="#7A8B9A"/>
+  <rect x="220" y="150" width="120" height="250" fill="#6B7D8E"/>
+  <rect x="360" y="180" width="180" height="220" fill="#8A9BAA"/>
+  <rect x="560" y="130" width="130" height="270" fill="#5C6E7F"/>
+  <rect x="710" y="170" width="160" height="230" fill="#7D8E9F"/>
+  <rect x="890" y="140" width="140" height="260" fill="#6A7B8C"/>
+  <rect x="1050" y="190" width="180" height="210" fill="#8B9CAB"/>
+  <!-- Windows on buildings -->
+  <rect x="80" y="220" width="25" height="30" fill="#F0E68C"/>
+  <rect x="120" y="220" width="25" height="30" fill="#F0E68C"/>
+  <rect x="80" y="270" width="25" height="30" fill="#B0C4DE"/>
+  <rect x="120" y="270" width="25" height="30" fill="#F0E68C"/>
+  <rect x="250" y="170" width="25" height="30" fill="#B0C4DE"/>
+  <rect x="290" y="170" width="25" height="30" fill="#F0E68C"/>
+  <rect x="250" y="220" width="25" height="30" fill="#F0E68C"/>
+  <rect x="290" y="220" width="25" height="30" fill="#B0C4DE"/>
+  <rect x="590" y="150" width="25" height="30" fill="#F0E68C"/>
+  <rect x="630" y="150" width="25" height="30" fill="#B0C4DE"/>
+  <rect x="590" y="200" width="25" height="30" fill="#B0C4DE"/>
+  <rect x="630" y="200" width="25" height="30" fill="#F0E68C"/>
+  <!-- Sidewalk -->
+  <rect x="0" y="400" width="1280" height="80" fill="#C0C0C0"/>
+  <!-- Road -->
+  <rect x="0" y="480" width="1280" height="240" fill="#4A4A4A"/>
+  <!-- Road markings -->
+  <rect x="200" y="595" width="80" height="10" fill="#FFFFFF"/>
+  <rect x="400" y="595" width="80" height="10" fill="#FFFFFF"/>
+  <rect x="600" y="595" width="80" height="10" fill="#FFFFFF"/>
+  <rect x="800" y="595" width="80" height="10" fill="#FFFFFF"/>
+  <rect x="1000" y="595" width="80" height="10" fill="#FFFFFF"/>
+  <!-- Lamp posts -->
+  <rect x="180" y="300" width="8" height="180" fill="#333333"/>
+  <circle cx="184" cy="295" r="15" fill="#FFD700"/>
+  <rect x="600" y="300" width="8" height="180" fill="#333333"/>
+  <circle cx="604" cy="295" r="15" fill="#FFD700"/>
+  <rect x="1020" y="300" width="8" height="180" fill="#333333"/>
+  <circle cx="1024" cy="295" r="15" fill="#FFD700"/>
+  <!-- Sidewalk lines -->
+  <line x1="0" y1="440" x2="1280" y2="440" stroke="#A0A0A0" stroke-width="2"/>
+</svg>

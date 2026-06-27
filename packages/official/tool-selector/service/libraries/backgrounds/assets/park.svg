@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <!-- Sky -->
+  <rect x="0" y="0" width="1280" height="400" fill="#87CEEB"/>
+  <!-- Sun -->
+  <circle cx="1100" cy="100" r="60" fill="#FFD700"/>
+  <!-- Clouds -->
+  <circle cx="300" cy="120" r="40" fill="#FFFFFF"/>
+  <circle cx="340" cy="110" r="50" fill="#FFFFFF"/>
+  <circle cx="380" cy="120" r="35" fill="#FFFFFF"/>
+  <circle cx="700" cy="80" r="30" fill="#FFFFFF"/>
+  <circle cx="735" cy="70" r="40" fill="#FFFFFF"/>
+  <circle cx="770" cy="80" r="30" fill="#FFFFFF"/>
+  <!-- Grass -->
+  <rect x="0" y="400" width="1280" height="320" fill="#4CAF50"/>
+  <!-- Path -->
+  <rect x="500" y="450" width="200" height="270" fill="#D2B48C" rx="5"/>
+  <!-- Trees -->
+  <!-- Tree 1 -->
+  <rect x="145" y="280" width="30" height="150" fill="#5D4037"/>
+  <circle cx="160" cy="240" r="70" fill="#2E7D32"/>
+  <circle cx="120" cy="260" r="50" fill="#388E3C"/>
+  <circle cx="200" cy="260" r="50" fill="#388E3C"/>
+  <!-- Tree 2 -->
+  <rect x="945" y="300" width="30" height="130" fill="#5D4037"/>
+  <circle cx="960" cy="260" r="60" fill="#2E7D32"/>
+  <circle cx="920" cy="280" r="45" fill="#388E3C"/>
+  <circle cx="1000" cy="280" r="45" fill="#388E3C"/>
+  <!-- Tree 3 -->
+  <rect x="1145" y="320" width="25" height="110" fill="#5D4037"/>
+  <circle cx="1157" cy="280" r="55" fill="#2E7D32"/>
+  <circle cx="1120" cy="300" r="40" fill="#388E3C"/>
+  <circle cx="1195" cy="300" r="40" fill="#388E3C"/>
+  <!-- Bench -->
+  <rect x="580" y="420" width="150" height="10" fill="#5D4037"/>
+  <rect x="590" y="430" width="5" height="30" fill="#4E342E"/>
+  <rect x="720" y="430" width="5" height="30" fill="#4E342E"/>
+  <rect x="575" y="400" width="10" height="30" fill="#5D4037"/>
+  <rect x="730" y="400" width="10" height="30" fill="#5D4037"/>
+  <!-- Flowers -->
+  <circle cx="350" cy="500" r="8" fill="#FF5722"/>
+  <circle cx="380" cy="520" r="8" fill="#FFEB3B"/>
+  <circle cx="410" cy="505" r="8" fill="#E91E63"/>
+  <circle cx="850" cy="480" r="8" fill="#FF9800"/>
+  <circle cx="880" cy="500" r="8" fill="#9C27B0"/>
+  <circle cx="910" cy="485" r="8" fill="#FFEB3B"/>
+</svg>

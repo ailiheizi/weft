@@ -55,7 +55,7 @@
     const RF = window.ReactFlow;
     // 从 URL query 取 core 地址 + token（Flutter 壳 launch 时拼入）。
     const qs = new URLSearchParams(location.search);
-    const CORE = qs.get('core') || 'http://127.0.0.1:3004';
+    const CORE = qs.get('core') || 'http://127.0.0.1:17830';
     const TOKEN = qs.get('token') || '';
 
     const statusEl = document.getElementById('status');

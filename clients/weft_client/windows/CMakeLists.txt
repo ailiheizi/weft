@@ -108,7 +108,11 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 
 # weft_core.dll(FFI):从 core 的 cargo 构建输出自动复制到 runner 目录。
 # 这样 flutter build 后 DLL 自动到位,不需要手动 cp。
-set(WEFT_CORE_DLL "${CMAKE_CURRENT_SOURCE_DIR}/../../core/target-verify/debug/weft_core.dll")
+# 优先 target/debug(常规 cargo build 输出)，回退 target-verify/debug(旧路径)。
+set(WEFT_CORE_DLL "${CMAKE_CURRENT_SOURCE_DIR}/../../core/target/debug/weft_core.dll")
+if(NOT EXISTS "${WEFT_CORE_DLL}")
+  set(WEFT_CORE_DLL "${CMAKE_CURRENT_SOURCE_DIR}/../../core/target-verify/debug/weft_core.dll")
+endif()
 if(EXISTS "${WEFT_CORE_DLL}")
   install(FILES "${WEFT_CORE_DLL}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
 endif()

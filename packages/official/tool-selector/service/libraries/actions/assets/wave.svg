@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400" width="200" height="400">
+  <!-- Stick Figure: Wave -->
+  <!-- Head -->
+  <circle cx="100" cy="60" r="25" stroke="black" stroke-width="8" fill="white"/>
+  <!-- Body -->
+  <line x1="100" y1="85" x2="100" y2="220" stroke="black" stroke-width="8"/>
+  <!-- Left arm (down at side) -->
+  <line x1="100" y1="120" x2="60" y2="180" stroke="black" stroke-width="8"/>
+  <!-- Right arm (raised waving) -->
+  <line x1="100" y1="120" x2="140" y2="90" stroke="black" stroke-width="8"/>
+  <line x1="140" y1="90" x2="160" y2="50" stroke="black" stroke-width="8"/>
+  <!-- Hand detail -->
+  <line x1="155" y1="45" x2="165" y2="55" stroke="black" stroke-width="5"/>
+  <!-- Left leg -->
+  <line x1="100" y1="220" x2="70" y2="340" stroke="black" stroke-width="8"/>
+  <!-- Right leg -->
+  <line x1="100" y1="220" x2="130" y2="340" stroke="black" stroke-width="8"/>
+  <!-- Feet -->
+  <line x1="70" y1="340" x2="55" y2="340" stroke="black" stroke-width="8" stroke-linecap="round"/>
+  <line x1="130" y1="340" x2="145" y2="340" stroke="black" stroke-width="8" stroke-linecap="round"/>
+  <!-- Motion lines for waving -->
+  <line x1="170" y1="35" x2="180" y2="30" stroke="black" stroke-width="3" stroke-linecap="round"/>
+  <line x1="172" y1="50" x2="185" y2="48" stroke="black" stroke-width="3" stroke-linecap="round"/>
+  <line x1="170" y1="65" x2="182" y2="67" stroke="black" stroke-width="3" stroke-linecap="round"/>
+</svg>

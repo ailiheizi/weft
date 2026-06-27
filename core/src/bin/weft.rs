@@ -3,7 +3,7 @@ use weft_core::service_manager::{
     platform_service_manager, resolve_install_options, PlatformServiceManager,
 };
 
-const DEFAULT_CORE_URL: &str = "http://127.0.0.1:17830";
+const DEFAULT_CORE_URL: &str = "http://127.0.0.1:8787";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Command {
@@ -942,8 +942,8 @@ mod tests {
 
     #[test]
     fn trims_trailing_slash_from_core_url() {
-        assert_eq!(trim_url("http://127.0.0.1:17830/"), "http://127.0.0.1:17830");
-        assert_eq!(trim_url("http://127.0.0.1:17830"), "http://127.0.0.1:17830");
+        assert_eq!(trim_url("http://127.0.0.1:8787/"), "http://127.0.0.1:8787");
+        assert_eq!(trim_url("http://127.0.0.1:8787"), "http://127.0.0.1:8787");
     }
 
     #[tokio::test]

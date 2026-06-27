@@ -19,6 +19,43 @@ fn rt() -> &'static Runtime {
     })
 }
 
+/// 探测 17830 是否已被占用(残留 core 进程或其他程序)。
+fn port_in_use() -> bool {
+    std::net::TcpStream::connect_timeout(
+        &"127.0.0.1:17830".parse().unwrap(),
+        std::time::Duration::from_millis(300),
+    )
+    .is_ok()
+}
+
+/// 启动前清理残留 core:若 17830 被占,尝试优雅关闭占用者(残留 core 暴露 /api/shutdown),
+/// 然后等端口释放。最多等 ~5s。返回 true=端口已空闲可用。
+fn ensure_port_free() -> bool {
+    if !port_in_use() {
+        return true;
+    }
+    // 端口被占:尝试用 runtime-token 优雅关闭残留 core。
+    let token = PROJECT_ROOT
+        .get()
+        .map(|r| r.join("data").join("runtime-token"))
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .unwrap_or_default();
+    let _ = reqwest::blocking::Client::new()
+        .post("http://127.0.0.1:17830/api/shutdown")
+        .bearer_auth(token.trim())
+        .timeout(std::time::Duration::from_secs(3))
+        .send();
+    // 等端口释放(最多 ~5s)。
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while std::time::Instant::now() < deadline {
+        if !port_in_use() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
+    !port_in_use()
+}
+
 /// 启动 weft-core:进程内直接运行(无子进程,无黑框)。
 /// project_root: 项目根目录绝对路径(含 config/config.toml + packages/ + data/)。
 /// 返回空字符串=成功(server 在后台跑),非空=错误信息。
@@ -36,6 +73,13 @@ pub fn start_core(project_root: String) -> String {
         return format!("failed to set cwd to {}: {}", project_root, e);
     }
 
+    // 启动前清残留:若 17830 被上次没退干净的 core 占着,先优雅关闭它,
+    // 让本进程的 HTTP listener 也能起来(非必须 — FFI dispatch 不依赖 HTTP,
+    // 但清掉残留可避免端口告警和僵尸进程堆积)。
+    if !ensure_port_free() {
+        eprintln!("[weft-ffi] port 17830 still occupied; continuing in FFI-only mode (in-process dispatch unaffected)");
+    }
+
     // 在后台线程启动 tokio runtime + run_server(进程内,不阻塞 Dart)。
     std::thread::spawn(move || {
         rt().block_on(async {
@@ -45,17 +89,19 @@ pub fn start_core(project_root: String) -> String {
         });
     });
 
-    // 等 health 就绪(最多 90s,debug 模式下 WASM 加载可能较慢)。
+    // 就绪检查走【进程内】信号(ROUTER 注册完成即可用),不依赖 HTTP health。
+    // 这彻底消除了"HTTP listener bind 慢/失败/被占 → 误判启动超时 → 降级 HTTP →
+    // 连接被拒"这一整类时序脆弱性。ROUTER 在 build_router 后、HTTP bind 前注册,
+    // 所以即使端口被占、HTTP 起不来,FFI dispatch 依然就绪。
+    // 最多等 90s(debug 模式 WASM 加载较慢)。
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
     while std::time::Instant::now() < deadline {
-        if let Ok(resp) = reqwest::blocking::get("http://127.0.0.1:17830/api/health") {
-            if resp.status().is_success() {
-                return String::new(); // 成功
-            }
+        if crate::api::rpc::router_ready() {
+            return String::new(); // 成功:FFI dispatch 就绪
         }
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        std::thread::sleep(std::time::Duration::from_millis(200));
     }
-    "core started but health check timed out after 30s".to_string()
+    "core start timed out: router not ready after 90s".to_string()
 }
 
 /// 统一 RPC 调用:直接内部 dispatch(不走网络,真正的 FFI)。

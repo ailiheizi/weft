@@ -1,0 +1,10 @@
+{"id": "bg_office", "name": "办公室", "description": "办公室 工位 电脑桌 上班 公司 写字楼 格子间", "tags": ["室内", "工作"], "asset_path": "assets/office.svg"}
+{"id": "bg_home", "name": "家里客厅", "description": "家里 客厅 沙发 家居 房间 宅 舒适", "tags": ["室内", "生活"], "asset_path": "assets/home.svg"}
+{"id": "bg_street", "name": "城市街道", "description": "城市街道 马路 人行道 逛街 户外 城市 路上", "tags": ["室外", "城市"], "asset_path": "assets/street.svg"}
+{"id": "bg_park", "name": "公园", "description": "公园 草地 树木 花园 户外 散步 绿色 自然", "tags": ["室外", "自然"], "asset_path": "assets/park.svg"}
+{"id": "bg_school", "name": "学校教室", "description": "学校 教室 课堂 黑板 上课 学习 课桌", "tags": ["室内", "学校"], "asset_path": "assets/school.svg"}
+{"id": "bg_stage", "name": "舞台", "description": "舞台 聚光灯 表演 演出 台上 灯光 演唱会", "tags": ["室内", "表演"], "asset_path": "assets/stage.svg"}
+{"id": "bg_night", "name": "夜晚街头", "description": "夜晚 深夜 黑暗 路灯 月亮 夜色 晚上 凌晨", "tags": ["室外", "夜晚"], "asset_path": "assets/night.svg"}
+{"id": "bg_cafe", "name": "咖啡厅", "description": "咖啡厅 咖啡店 喝咖啡 下午茶 约会 聊天 休闲", "tags": ["室内", "休闲"], "asset_path": "assets/cafe.svg"}
+{"id": "bg_gym", "name": "健身房", "description": "健身房 运动 锻炼 跑步机 撸铁 汗水 训练", "tags": ["室内", "运动"], "asset_path": "assets/gym.svg"}
+{"id": "bg_beach", "name": "海滩", "description": "海滩 沙滩 大海 海边 度假 阳光 海浪 夏天", "tags": ["室外", "度假"], "asset_path": "assets/beach.svg"}

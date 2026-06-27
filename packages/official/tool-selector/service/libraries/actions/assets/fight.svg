@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400" width="200" height="400">
+  <!-- Stick Figure: Fight (punch pose, body sideways) -->
+  <!-- Head -->
+  <circle cx="110" cy="60" r="25" stroke="black" stroke-width="8" fill="white"/>
+  <!-- Body (turned slightly sideways) -->
+  <line x1="110" y1="85" x2="105" y2="220" stroke="black" stroke-width="8"/>
+  <!-- Left arm (pulled back, fist ready) -->
+  <line x1="108" y1="125" x2="140" y2="130" stroke="black" stroke-width="8"/>
+  <line x1="140" y1="130" x2="150" y2="120" stroke="black" stroke-width="8"/>
+  <!-- Fist detail (pulled back) -->
+  <circle cx="153" cy="118" r="6" stroke="black" stroke-width="4" fill="white"/>
+  <!-- Right arm (extended forward as punch) -->
+  <line x1="108" y1="125" x2="70" y2="120" stroke="black" stroke-width="8"/>
+  <line x1="70" y1="120" x2="30" y2="115" stroke="black" stroke-width="8"/>
+  <!-- Fist (punching) -->
+  <circle cx="25" cy="114" r="8" stroke="black" stroke-width="5" fill="white"/>
+  <!-- Impact lines -->
+  <line x1="12" y1="105" x2="5" y2="100" stroke="black" stroke-width="3" stroke-linecap="round"/>
+  <line x1="10" y1="114" x2="2" y2="114" stroke="black" stroke-width="3" stroke-linecap="round"/>
+  <line x1="12" y1="123" x2="5" y2="128" stroke="black" stroke-width="3" stroke-linecap="round"/>
+  <!-- Left leg (back stance) -->
+  <line x1="105" y1="220" x2="130" y2="285" stroke="black" stroke-width="8"/>
+  <line x1="130" y1="285" x2="135" y2="340" stroke="black" stroke-width="8"/>
+  <!-- Right leg (front stance) -->
+  <line x1="105" y1="220" x2="75" y2="280" stroke="black" stroke-width="8"/>
+  <line x1="75" y1="280" x2="70" y2="340" stroke="black" stroke-width="8"/>
+  <!-- Feet -->
+  <line x1="135" y1="340" x2="148" y2="340" stroke="black" stroke-width="8" stroke-linecap="round"/>
+  <line x1="70" y1="340" x2="57" y2="340" stroke="black" stroke-width="8" stroke-linecap="round"/>
+</svg>

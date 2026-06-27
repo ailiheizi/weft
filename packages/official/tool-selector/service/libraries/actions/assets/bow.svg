@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400" width="200" height="400">
+  <!-- Stick Figure: Bow (upper body bent forward) -->
+  <!-- Head (bent forward and down) -->
+  <circle cx="65" cy="110" r="25" stroke="black" stroke-width="8" fill="white"/>
+  <!-- Upper body (bent at waist, leaning forward) -->
+  <line x1="100" y1="200" x2="75" y2="130" stroke="black" stroke-width="8"/>
+  <!-- Lower body (vertical from waist down) -->
+  <line x1="100" y1="200" x2="100" y2="220" stroke="black" stroke-width="8"/>
+  <!-- Left arm (hanging down from bent position) -->
+  <line x1="83" y1="155" x2="70" y2="190" stroke="black" stroke-width="8"/>
+  <!-- Right arm (hanging down from bent position) -->
+  <line x1="83" y1="155" x2="95" y2="190" stroke="black" stroke-width="8"/>
+  <!-- Left leg -->
+  <line x1="100" y1="220" x2="75" y2="340" stroke="black" stroke-width="8"/>
+  <!-- Right leg -->
+  <line x1="100" y1="220" x2="125" y2="340" stroke="black" stroke-width="8"/>
+  <!-- Feet -->
+  <line x1="75" y1="340" x2="62" y2="340" stroke="black" stroke-width="8" stroke-linecap="round"/>
+  <line x1="125" y1="340" x2="138" y2="340" stroke="black" stroke-width="8" stroke-linecap="round"/>
+</svg>

@@ -271,7 +271,12 @@ pub async fn run_server() -> anyhow::Result<()> {
     let managed_runtime = is_managed_runtime_root(&current_dir);
     let repo_root = if managed_runtime {
         current_dir.clone()
-    } else if current_dir.join("packages").is_dir() && current_dir.join("config").is_dir() {
+    } else if current_dir.join("packages").join("index.toml").is_file() {
+        // A packaged desktop bundle sits cwd-side as `<bundle>/{weft-core.exe,
+        // packages/index.toml}` with no `config/` dir. Treat any cwd that holds
+        // a package index as the runtime root so the bundled packages load,
+        // instead of falling back to the compile-time source tree (which does
+        // not exist on an end-user machine → empty package list, blank app).
         current_dir.clone()
     } else {
         repo_source_root.clone()
@@ -1029,12 +1034,28 @@ pub async fn run_server() -> anyhow::Result<()> {
     // Build router and serve
     let app = build_router(state);
     // 注册全局 router 供 /rpc 内部 dispatch 和 FFI rpc_call 直接调用(不走网络)。
+    // 注意:这一步完成后 FFI dispatch 即可用,与 HTTP listener 是否成功无关。
     crate::api::rpc::set_global_router(app.clone());
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
-    tracing::info!("weft-core listening on {}", addr);
-    axum::serve(listener, app)
-        .with_graceful_shutdown(graceful_shutdown)
-        .await?;
+    // HTTP listener 绑定失败设为非致命:FFI 模式(客户端进程内嵌)下所有请求走
+    // 进程内 dispatch,不依赖 HTTP。端口被残留进程占用时(os error 10048)只告警,
+    // 让 core 继续以纯 FFI 模式运行,而不是整个 run_server 失败退出。
+    match tokio::net::TcpListener::bind(&addr).await {
+        Ok(listener) => {
+            tracing::info!("weft-core listening on {}", addr);
+            axum::serve(listener, app)
+                .with_graceful_shutdown(graceful_shutdown)
+                .await?;
+        }
+        Err(e) => {
+            tracing::warn!(
+                "HTTP listener bind on {} failed ({}); continuing in FFI-only mode (in-process dispatch still works). Awaiting shutdown signal.",
+                addr,
+                e
+            );
+            // 不起 HTTP,但仍等待 shutdown 信号以便优雅退出(保存 KV、停服务)。
+            graceful_shutdown.await;
+        }
+    }
 
     Ok(())
 }

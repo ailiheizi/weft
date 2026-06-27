@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400" width="200" height="400">
+  <!-- Stick Figure: Dance (dynamic pose) -->
+  <!-- Head -->
+  <circle cx="105" cy="60" r="25" stroke="black" stroke-width="8" fill="white"/>
+  <!-- Body (slight lean) -->
+  <line x1="105" y1="85" x2="95" y2="215" stroke="black" stroke-width="8"/>
+  <!-- Left arm (raised high diagonal) -->
+  <line x1="98" y1="125" x2="55" y2="95" stroke="black" stroke-width="8"/>
+  <line x1="55" y1="95" x2="40" y2="65" stroke="black" stroke-width="8"/>
+  <!-- Right arm (out to the side low) -->
+  <line x1="98" y1="125" x2="145" y2="155" stroke="black" stroke-width="8"/>
+  <line x1="145" y1="155" x2="165" y2="140" stroke="black" stroke-width="8"/>
+  <!-- Left leg (standing, slightly bent) -->
+  <line x1="95" y1="215" x2="80" y2="280" stroke="black" stroke-width="8"/>
+  <line x1="80" y1="280" x2="75" y2="340" stroke="black" stroke-width="8"/>
+  <!-- Right leg (kicked out to the side) -->
+  <line x1="95" y1="215" x2="130" y2="250" stroke="black" stroke-width="8"/>
+  <line x1="130" y1="250" x2="165" y2="265" stroke="black" stroke-width="8"/>
+  <!-- Feet -->
+  <line x1="75" y1="340" x2="63" y2="340" stroke="black" stroke-width="8" stroke-linecap="round"/>
+  <line x1="165" y1="265" x2="175" y2="260" stroke="black" stroke-width="8" stroke-linecap="round"/>
+  <!-- Music notes -->
+  <text x="140" y="50" font-size="18" font-family="Arial" fill="black">&#9834;</text>
+  <text x="160" y="75" font-size="14" font-family="Arial" fill="black">&#9835;</text>
+</svg>

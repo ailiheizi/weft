@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400" width="200" height="400">
+  <!-- Stick Figure: Walk (mid-stride) -->
+  <!-- Head -->
+  <circle cx="100" cy="60" r="25" stroke="black" stroke-width="8" fill="white"/>
+  <!-- Body (slight lean forward) -->
+  <line x1="100" y1="85" x2="95" y2="220" stroke="black" stroke-width="8"/>
+  <!-- Left arm (swinging back) -->
+  <line x1="95" y1="125" x2="120" y2="175" stroke="black" stroke-width="8"/>
+  <!-- Right arm (swinging forward) -->
+  <line x1="95" y1="125" x2="65" y2="165" stroke="black" stroke-width="8"/>
+  <!-- Left leg (back, extended behind) -->
+  <line x1="95" y1="220" x2="130" y2="280" stroke="black" stroke-width="8"/>
+  <line x1="130" y1="280" x2="140" y2="340" stroke="black" stroke-width="8"/>
+  <!-- Right leg (front, stepping forward) -->
+  <line x1="95" y1="220" x2="60" y2="280" stroke="black" stroke-width="8"/>
+  <line x1="60" y1="280" x2="55" y2="340" stroke="black" stroke-width="8"/>
+  <!-- Feet -->
+  <line x1="140" y1="340" x2="150" y2="340" stroke="black" stroke-width="8" stroke-linecap="round"/>
+  <line x1="55" y1="340" x2="42" y2="340" stroke="black" stroke-width="8" stroke-linecap="round"/>
+</svg>

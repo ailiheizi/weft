@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <!-- Sky -->
+  <rect x="0" y="0" width="1280" height="350" fill="#87CEEB"/>
+  <!-- Sun -->
+  <circle cx="1050" cy="100" r="70" fill="#FFD700"/>
+  <!-- Clouds -->
+  <circle cx="200" cy="100" r="35" fill="#FFFFFF"/>
+  <circle cx="240" cy="90" r="45" fill="#FFFFFF"/>
+  <circle cx="280" cy="100" r="30" fill="#FFFFFF"/>
+  <circle cx="600" cy="70" r="30" fill="#FFFFFF"/>
+  <circle cx="635" cy="60" r="40" fill="#FFFFFF"/>
+  <circle cx="670" cy="70" r="28" fill="#FFFFFF"/>
+  <!-- Ocean -->
+  <rect x="0" y="350" width="1280" height="150" fill="#1E88E5"/>
+  <!-- Waves -->
+  <path d="M0,380 Q80,365 160,380 T320,380 T480,380 T640,380 T800,380 T960,380 T1120,380 T1280,380" fill="none" stroke="#42A5F5" stroke-width="3"/>
+  <path d="M0,400 Q80,385 160,400 T320,400 T480,400 T640,400 T800,400 T960,400 T1120,400 T1280,400" fill="none" stroke="#42A5F5" stroke-width="2"/>
+  <path d="M0,420 Q80,410 160,420 T320,420 T480,420 T640,420 T800,420 T960,420 T1120,420 T1280,420" fill="none" stroke="#64B5F6" stroke-width="2"/>
+  <!-- Beach / sand -->
+  <rect x="0" y="480" width="1280" height="240" fill="#F4D03F"/>
+  <rect x="0" y="480" width="1280" height="30" fill="#E5BE36"/>
+  <!-- Palm tree -->
+  <rect x="195" y="300" width="20" height="250" fill="#5D4037"/>
+  <!-- Slight curve -->
+  <path d="M205,300 Q210,200 200,180" fill="none" stroke="#5D4037" stroke-width="18"/>
+  <!-- Palm leaves -->
+  <path d="M200,180 Q140,150 80,180" fill="none" stroke="#2E7D32" stroke-width="8"/>
+  <path d="M200,180 Q260,140 320,170" fill="none" stroke="#2E7D32" stroke-width="8"/>
+  <path d="M200,180 Q180,120 150,100" fill="none" stroke="#388E3C" stroke-width="7"/>
+  <path d="M200,180 Q230,130 270,110" fill="none" stroke="#388E3C" stroke-width="7"/>
+  <path d="M200,180 Q200,130 210,90" fill="none" stroke="#43A047" stroke-width="6"/>
+  <!-- Beach umbrella -->
+  <rect x="800" y="450" width="8" height="150" fill="#5D4037"/>
+  <path d="M720,450 Q804,380 888,450 Z" fill="#E53935"/>
+  <line x1="804" y1="390" x2="804" y2="450" stroke="#B71C1C" stroke-width="2"/>
+  <line x1="762" y1="420" x2="762" y2="450" stroke="#B71C1C" stroke-width="2"/>
+  <line x1="846" y1="420" x2="846" y2="450" stroke="#B71C1C" stroke-width="2"/>
+  <!-- Beach towel -->
+  <rect x="750" y="560" width="120" height="60" fill="#2196F3" rx="3"/>
+  <!-- Shells -->
+  <circle cx="500" cy="600" r="6" fill="#FFCCBC"/>
+  <circle cx="600" cy="630" r="5" fill="#FFCCBC"/>
+  <circle cx="1000" cy="580" r="7" fill="#FFCCBC"/>
+</svg>
