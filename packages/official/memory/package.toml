@@ -12,7 +12,7 @@ api_version = "weft.package.manifest/v1"
 assets = ["server.py", "hermes_port"]
 
 [runtime_contract]
-startup_mode = "persistent"
+startup_mode = "on_demand"
 communication = ["http"]
 config_delivery = ["env"]
 readiness_probe = "http://127.0.0.1:43129/health"

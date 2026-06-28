@@ -138,16 +138,37 @@ pub fn rpc_call(request_json: String) -> String {
 }
 
 /// 停止 core。
+/// 优先使用进程内 dispatch 触发 shutdown(不依赖 HTTP listener 是否存活),
+/// 回退到 HTTP 请求(兼容独立进程部署场景)。
 pub fn stop_core() {
     let token_path = PROJECT_ROOT
         .get()
         .map(|r| r.join("data").join("runtime-token"))
         .unwrap_or_else(|| PathBuf::from("./data/runtime-token"));
     let token = std::fs::read_to_string(&token_path)
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+
+    // 优先:进程内 dispatch(FFI-only 模式下 HTTP 不可用,但 router 已注册)。
+    if crate::api::rpc::router_ready() {
+        let envelope = crate::api::rpc::RequestEnvelope {
+            id: "ffi-shutdown".to_string(),
+            method: "POST".to_string(),
+            path: "/api/shutdown".to_string(),
+            headers: std::collections::HashMap::new(),
+            body: serde_json::Value::Null,
+        };
+        rt().block_on(async {
+            crate::api::rpc::dispatch_internal(envelope, &token).await;
+        });
+        return;
+    }
+
+    // 回退:HTTP 请求(独立部署或 router 尚未就绪的极端情况)。
     let _ = reqwest::blocking::Client::new()
         .post("http://127.0.0.1:17830/api/shutdown")
-        .bearer_auth(token.trim())
+        .bearer_auth(&token)
         .send();
 }
 

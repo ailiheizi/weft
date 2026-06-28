@@ -99,3 +99,5 @@ Thumbs.db
 
 # ===== 原始展示素材（含视频，体积大；仅 docs/images 下的精简截图进仓库）=====
 showcase/
+packages/official/context-engine/
+packages/official/generic-agent-runtime/

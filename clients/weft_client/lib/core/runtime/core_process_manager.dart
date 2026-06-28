@@ -182,14 +182,40 @@ class CoreProcessManager {
   }
 
   /// Stop the core if (and only if) we started it.
+  ///
+  /// Sends a graceful shutdown request via the HTTP API first so the core can
+  /// stop child services and persist state. Falls back to SIGTERM/SIGKILL if
+  /// the API call fails or the process doesn't exit in time.
   Future<void> dispose() async {
     if (!_startedByUs || _process == null) return;
     debugPrint('stopping weft-core (pid ${_process!.pid})');
-    _process!.kill(ProcessSignal.sigterm);
+
+    // Graceful: ask core to shut down via API (stops child processes, saves KV).
+    try {
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 2);
+      final req = await client.postUrl(Uri.parse('$baseUrl/api/shutdown'));
+      if (tokenFilePath != null) {
+        final token = await File(tokenFilePath!).readAsString();
+        req.headers.set('Authorization', 'Bearer ${token.trim()}');
+      }
+      req.contentLength = 0;
+      await req.close().timeout(const Duration(seconds: 2));
+      client.close(force: true);
+    } catch (_) {
+      // API unreachable — fall through to kill.
+    }
+
+    // Wait for natural exit after shutdown signal.
     try {
       await _process!.exitCode.timeout(const Duration(seconds: 5));
     } on TimeoutException {
-      _process!.kill(ProcessSignal.sigkill);
+      // Still alive — escalate.
+      _process!.kill(ProcessSignal.sigterm);
+      try {
+        await _process!.exitCode.timeout(const Duration(seconds: 3));
+      } on TimeoutException {
+        _process!.kill(ProcessSignal.sigkill);
+      }
     }
     _process = null;
     _startedByUs = false;

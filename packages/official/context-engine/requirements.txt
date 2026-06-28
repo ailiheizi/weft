@@ -1,5 +1,0 @@
-numpy==2.4.4
-sherpa-onnx==1.12.39
-soundfile==0.13.1
-sounddevice==0.5.5
-PyAudioWPatch==0.2.12.8

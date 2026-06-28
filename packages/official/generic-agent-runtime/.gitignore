@@ -1,8 +1,0 @@
-__pycache__/
-*.pyc
-*.log
-runtime-root/
-data/
-node_modules/
-*.wasm
-.venv/

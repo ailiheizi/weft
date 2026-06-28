@@ -224,10 +224,19 @@ pub async fn create_provider(
             .into_response();
     }
 
+    // Return the created provider so the client can parse it as ProviderConfig.
+    let created = config.providers.last().unwrap();
     (
         StatusCode::CREATED,
         Json(serde_json::json!({
-            "message": format!("Provider '{}' created successfully", req.name)
+            "name": created.name,
+            "base_url": created.base_url,
+            "format": created.format,
+            "models": created.models,
+            "keys": created.keys.iter().map(|k| serde_json::json!({
+                "value": k.value,
+                "label": k.label,
+            })).collect::<Vec<_>>(),
         })),
     )
         .into_response()
@@ -381,7 +390,11 @@ pub async fn list_upstream_models(
     let base_url = provider.base_url.trim_end_matches('/').to_string();
     drop(config); // 释放读锁
 
-    let url = format!("{base_url}/v1/models");
+    let url = if base_url.ends_with("/v1") {
+        format!("{base_url}/models")
+    } else {
+        format!("{base_url}/v1/models")
+    };
     let client = reqwest::Client::new();
     let mut req = client.get(&url);
     if let Some(key) = &api_key {

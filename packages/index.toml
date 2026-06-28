@@ -206,39 +206,6 @@ signature = "builtin:official"
 provides = ["memory.runtime", "memory.curated"]
 
 [[package_sources]]
-name = "context-engine"
-kind = "service"
-package_kind = "provider"
-runtime_provider = "context-engine"
-current_source = "packages/official/context-engine"
-trusted = true
-signature = "builtin:official"
-source_authority = "official"
-provides = ["context.engine", "context.ingest", "context.match"]
-
-[[package_sources]]
-name = "generic-agent-runtime"
-kind = "service"
-package_kind = "provider"
-runtime_provider = "generic-agent-runtime"
-current_source = "packages/official/generic-agent-runtime"
-trusted = true
-signature = "builtin:official"
-source_authority = "official"
-provides = ["generic_agent.plan", "generic_agent.run", "generic_agent.verify", "generic_agent.crystallize"]
-
-[[package_sources]]
-name = "js-extension-runtime"
-kind = "service"
-package_kind = "provider"
-runtime_provider = "js-extension-runtime"
-current_source = "packages/official/js-extension-runtime"
-trusted = true
-signature = "builtin:official"
-source_authority = "official"
-provides = ["extension.runtime.js", "skill.discovery", "prompt.template.discovery"]
-
-[[package_sources]]
 name = "ai-workspace-browser"
 kind = "embedded"
 package_kind = "provider"
