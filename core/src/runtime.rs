@@ -281,7 +281,7 @@ pub async fn run_server() -> anyhow::Result<()> {
     } else {
         repo_source_root.clone()
     };
-    let config_path = if managed_runtime {
+    let mut config_path = if managed_runtime {
         repo_root.join("config").join("config.toml")
     } else {
         [
@@ -303,11 +303,13 @@ pub async fn run_server() -> anyhow::Result<()> {
             match args[i].as_str() {
                 "--config-dir" => {
                     if let Some(val) = args.get(i + 1) {
-                        // Reload config from the specified directory.
+                        // Always update config_path so save_config writes here
+                        // (the bundled desktop app needs a writable location).
                         let override_path = PathBuf::from(val).join("config.toml");
                         if override_path.exists() {
                             config = load_config_or_default(&override_path);
                         }
+                        config_path = override_path;
                         i += 2;
                     } else {
                         i += 1;

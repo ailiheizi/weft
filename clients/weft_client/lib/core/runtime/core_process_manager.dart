@@ -88,7 +88,7 @@ class CoreProcessManager {
     try {
       _process = await Process.start(
         binary.path,
-        ['--port', '$port', '--data-dir', _dataDir!],
+        ['--port', '$port', '--data-dir', _dataDir!, '--config-dir', _dataDir!],
         workingDirectory: binary.parent.path,
         // Detach stdio; the core logs to its own facilities.
         mode: ProcessStartMode.normal,
