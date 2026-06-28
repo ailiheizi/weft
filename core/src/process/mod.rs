@@ -11,6 +11,84 @@ use std::time::{Duration, Instant};
 const AUTO_START_READY_TIMEOUT: Duration = Duration::from_secs(30);
 const AUTO_START_READY_RECOVERY_TIMEOUT: Duration = Duration::from_secs(300);
 
+// ---------- Windows Job Object: kill all child processes when core exits ----------
+#[cfg(windows)]
+mod job {
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+    use windows_sys::Win32::System::Threading::OpenProcess;
+    use windows_sys::Win32::System::Threading::PROCESS_ALL_ACCESS;
+
+    /// A Win32 Job Object that kills all assigned processes when dropped.
+    pub struct JobObject {
+        handle: HANDLE,
+    }
+
+    unsafe impl Send for JobObject {}
+    unsafe impl Sync for JobObject {}
+
+    impl JobObject {
+        pub fn new() -> Option<Self> {
+            unsafe {
+                let handle = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+                if handle.is_null() {
+                    return None;
+                }
+                // Configure: kill all processes in the job when the handle is closed.
+                let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+                info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                let ok = SetInformationJobObject(
+                    handle,
+                    JobObjectExtendedLimitInformation,
+                    &info as *const _ as *const _,
+                    std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+                );
+                if ok == 0 {
+                    CloseHandle(handle);
+                    return None;
+                }
+                Some(Self { handle })
+            }
+        }
+
+        /// Assign a child process (by pid) to this job.
+        pub fn assign_process(&self, pid: u32) -> bool {
+            unsafe {
+                let proc_handle = OpenProcess(PROCESS_ALL_ACCESS, 0, pid);
+                if proc_handle.is_null() {
+                    return false;
+                }
+                let ok = AssignProcessToJobObject(self.handle, proc_handle);
+                CloseHandle(proc_handle);
+                ok != 0
+            }
+        }
+    }
+
+    impl Drop for JobObject {
+        fn drop(&mut self) {
+            unsafe {
+                CloseHandle(self.handle);
+            }
+        }
+    }
+}
+
+#[cfg(not(windows))]
+mod job {
+    /// No-op on non-Windows platforms (Unix uses process groups / PR_SET_PDEATHSIG).
+    pub struct JobObject;
+    impl JobObject {
+        pub fn new() -> Option<Self> { Some(Self) }
+        pub fn assign_process(&self, _pid: u32) -> bool { true }
+    }
+}
+// ---------- End Job Object ----------
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ServiceStatus {
     Stopped,
@@ -49,6 +127,9 @@ struct ManagedService {
 
 pub struct ProcessManager {
     services: RwLock<HashMap<String, ManagedService>>,
+    /// Job Object: all child processes are assigned here; when core exits
+    /// (or this is dropped), the OS kills them automatically.
+    _job: Option<job::JobObject>,
 }
 
 impl Default for ProcessManager {
@@ -59,8 +140,13 @@ impl Default for ProcessManager {
 
 impl ProcessManager {
     pub fn new() -> Self {
+        let _job = job::JobObject::new();
+        if _job.is_none() {
+            tracing::warn!("Failed to create Job Object — child processes may outlive core");
+        }
         Self {
             services: RwLock::new(HashMap::new()),
+            _job,
         }
     }
 
@@ -139,6 +225,14 @@ impl ProcessManager {
         let child = cmd
             .spawn()
             .with_context(|| format!("Failed to start service '{}'", name))?;
+
+        // Assign to Job Object so the child dies when core exits.
+        if let Some(ref job) = self._job {
+            let pid = child.id();
+            if !job.assign_process(pid) {
+                tracing::warn!("Failed to assign service '{}' (pid {}) to Job Object", name, pid);
+            }
+        }
 
         tracing::info!("Started service '{}' (pid: {:?})", name, child.id());
         let mut child = child;
