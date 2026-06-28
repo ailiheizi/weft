@@ -5,6 +5,54 @@ import onnxruntime as ort
 from pathlib import Path
 from transformers import AutoTokenizer
 
+# GitHub Release URL for model assets (manual download).
+MODEL_DOWNLOAD_URL = "https://github.com/ailiheizi/universal-selector/releases/tag/v0.1.0"
+_REQUIRED_FILES = {
+    "int8": ["model_int8.onnx", "tokenizer.json", "tokenizer_config.json"],
+    "full": ["model.onnx", "model.onnx.data", "tokenizer.json", "tokenizer_config.json"],
+}
+
+
+def check_models_available(model_dir: str = None, use_int8: bool = True) -> dict:
+    """Check if model files are present. Returns status dict for UI display.
+
+    Returns:
+        {
+            "available": bool,
+            "model_dir": str,
+            "missing": [str],  # list of missing file names
+            "download_url": str,
+            "message": str,    # human-readable status
+        }
+    """
+    if model_dir is None:
+        model_dir = str(Path(__file__).resolve().parent.parent / "models")
+    model_dir = Path(model_dir)
+    variant = "int8" if use_int8 else "full"
+    needed = _REQUIRED_FILES[variant]
+    missing = [f for f in needed if not (model_dir / f).exists()]
+
+    if not missing:
+        return {
+            "available": True,
+            "model_dir": str(model_dir),
+            "missing": [],
+            "download_url": MODEL_DOWNLOAD_URL,
+            "message": "语义选择引擎已就绪",
+        }
+    else:
+        return {
+            "available": False,
+            "model_dir": str(model_dir),
+            "missing": missing,
+            "download_url": MODEL_DOWNLOAD_URL,
+            "message": (
+                f"语义选择引擎需要下载模型文件({', '.join(missing)})。\n"
+                f"请从以下地址下载并放入 {model_dir}:\n"
+                f"{MODEL_DOWNLOAD_URL}"
+            ),
+        }
+
 
 class OnnxEncoder:
     """Fast ONNX encoder for universal selector. Drop-in replacement for SelectorEncoder."""
@@ -14,20 +62,21 @@ class OnnxEncoder:
 
         Args:
             model_dir: Path to directory containing model.onnx/model_int8.onnx + tokenizer files.
-                       Defaults to models/onnx/ under project root.
+                       Defaults to models/ under package root.
             use_int8: Use INT8 quantized model (faster, slightly less accurate).
             max_length: Max token length for input texts (64 for short queries, 128 for longer text).
         """
         self.max_length = max_length
         if model_dir is None:
-            model_dir = str(Path(__file__).resolve().parent.parent / "models" / "onnx")
+            model_dir = str(Path(__file__).resolve().parent.parent / "models")
 
         model_dir = Path(model_dir)
         model_file = "model_int8.onnx" if use_int8 else "model.onnx"
         model_path = model_dir / model_file
 
         if not model_path.exists():
-            raise FileNotFoundError(f"ONNX model not found: {model_path}")
+            status = check_models_available(str(model_dir), use_int8)
+            raise FileNotFoundError(status["message"])
 
         # Load tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(str(model_dir))
