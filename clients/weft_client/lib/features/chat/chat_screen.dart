@@ -15,6 +15,8 @@ import '../../core/providers/selector_provider.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/resizable_handle.dart';
+import 'tool_display/generic_tool_bubble.dart';
+import 'tool_display/tool_bubble_chrome.dart';
 import 'tool_display/tool_registry.dart';
 import 'workspace/artifact.dart';
 import 'workspace/workspace_panel.dart';
@@ -1064,43 +1066,6 @@ class _AskUserOptions extends ConsumerWidget {
 
 // ─── 执行步骤面板 ─────────────────────────────────────────────────────────────
 
-/// 工具调用状态(从 result 派生)。
-enum _ToolStatus { pending, success, error }
-
-_ToolStatus _toolStatus(ToolCallStep s) {
-  if (s.result == null) return _ToolStatus.pending;
-  final r = s.result!.toLowerCase();
-  if (r.contains('"status":"error"') ||
-      r.contains('"error"') ||
-      r.contains('error:') ||
-      r.contains('failed') ||
-      r.contains('exception')) {
-    return _ToolStatus.error;
-  }
-  return _ToolStatus.success;
-}
-
-/// 工具状态对应的语义色(取 theme)。
-({Color fg, Color bg}) _toolStatusColors(_ToolStatus st, ThemeData theme) {
-  switch (st) {
-    case _ToolStatus.pending:
-      return (
-        fg: theme.colorScheme.onSurfaceVariant,
-        bg: theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.4),
-      );
-    case _ToolStatus.success:
-      return (
-        fg: theme.colorScheme.primary,
-        bg: theme.colorScheme.primaryContainer.withValues(alpha: 0.22),
-      );
-    case _ToolStatus.error:
-      return (
-        fg: theme.colorScheme.error,
-        bg: theme.colorScheme.errorContainer.withValues(alpha: 0.28),
-      );
-  }
-}
-
 class _ExecutionStepsPanel extends StatefulWidget {
   const _ExecutionStepsPanel({required this.steps, this.forceExpanded = false});
   final List<ExecutionStep> steps;
@@ -1230,13 +1195,13 @@ class _ToolGroupItemState extends State<_ToolGroupItem> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     // 分组聚合状态:有 error→error;有 pending→pending;否则 success。
-    final statuses = widget.calls.map(_toolStatus).toList();
-    final agg = statuses.contains(_ToolStatus.error)
-        ? _ToolStatus.error
-        : statuses.contains(_ToolStatus.pending)
-            ? _ToolStatus.pending
-            : _ToolStatus.success;
-    final c = _toolStatusColors(agg, theme);
+    final statuses = widget.calls.map(toolStatusOf).toList();
+    final agg = statuses.contains(ToolStatus.error)
+        ? ToolStatus.error
+        : statuses.contains(ToolStatus.pending)
+            ? ToolStatus.pending
+            : ToolStatus.success;
+    final c = toolStatusColors(agg, theme);
     final label = widget.name.isEmpty ? 'Tool call' : widget.name;
 
     return Container(
@@ -1255,7 +1220,7 @@ class _ToolGroupItemState extends State<_ToolGroupItem> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Row(
                 children: [
-                  if (agg == _ToolStatus.pending)
+                  if (agg == ToolStatus.pending)
                     SizedBox(
                       width: 12,
                       height: 12,
@@ -1264,7 +1229,7 @@ class _ToolGroupItemState extends State<_ToolGroupItem> {
                     )
                   else
                     Icon(
-                      agg == _ToolStatus.error
+                      agg == ToolStatus.error
                           ? Icons.error_outline
                           : Icons.check_circle_outline,
                       size: 13,
@@ -1342,126 +1307,13 @@ class _StepItem extends ConsumerWidget {
         ),
       ),
       toolCall: (s) {
-        // 专属气泡优先：命中注册表则用领域化富展示；未命中走下方通用渲染。
+        // 专属气泡优先：命中注册表则用领域化富展示；未命中走通用气泡兜底。
         final bubbleBuilder = bubbleBuilderFor(s.name);
         if (bubbleBuilder != null) {
           return bubbleBuilder(s);
         }
-        final artifact = Artifact.fromToolCall(s);
-        final st = _toolStatus(s);
-        final statusColor = _toolStatusColors(st, theme).fg;
-        final statusIcon = st == _ToolStatus.error
-            ? Icons.error_outline
-            : st == _ToolStatus.success
-                ? Icons.check_circle_outline
-                : Icons.build_outlined;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(statusIcon, size: 12, color: statusColor),
-                  const SizedBox(width: 4),
-                  Text(
-                    s.name.isEmpty ? 'Tool call' : s.name,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: statusColor,
-                    ),
-                  ),
-                  if (artifact != null) ...[
-                    const SizedBox(width: 6),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () =>
-                          ref.read(workspaceProvider.notifier).show(artifact),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 1),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(_artifactIcon(artifact.kind),
-                                size: 11, color: theme.colorScheme.primary),
-                            const SizedBox(width: 3),
-                            Text('查看',
-                                style: TextStyle(
-                                    fontSize: 10,
-                                    color: theme.colorScheme.primary)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            if (s.arguments.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: GlassTokens.innerTileFillOf(context),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  s.arguments,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontFamily: 'monospace',
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-              ),
-            ],
-            if (s.result == null) ...[
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  SizedBox(
-                    width: 11,
-                    height: 11,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 1.5,
-                      color: theme.colorScheme.secondary,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Running…',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: theme.colorScheme.secondary,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (s.result != null) ...[
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Icon(Icons.check_circle_outline,
-                      size: 11, color: theme.colorScheme.primary),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      s.result!,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
-        );
+        // 通用兜底：统一外壳 + KvTable/RawOutput（含所有 MCP 工具）。
+        return GenericToolBubble(step: s);
       },
       askUser: (s) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
@@ -1484,21 +1336,6 @@ class _StepItem extends ConsumerWidget {
         ),
       ),
     );
-  }
-}
-
-IconData _artifactIcon(ArtifactKind kind) {
-  switch (kind) {
-    case ArtifactKind.file:
-      return Icons.insert_drive_file_outlined;
-    case ArtifactKind.terminal:
-      return Icons.terminal_outlined;
-    case ArtifactKind.web:
-      return Icons.language_outlined;
-    case ArtifactKind.step:
-      return Icons.timeline_outlined;
-    case ArtifactKind.orchestration:
-      return Icons.account_tree_outlined;
   }
 }
 
@@ -1611,6 +1448,7 @@ class _ToolSelectorChips extends ConsumerWidget {
     final session = ref.watch(chatProvider(sessionId));
     final theme = Theme.of(context);
     final isInjected = selectorState.active.isNotEmpty && session.isStreaming;
+    final modelReady = selectorState.modelReady;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -1642,46 +1480,64 @@ class _ToolSelectorChips extends ConsumerWidget {
                         : theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
+              // ── 模型未就绪提示 ──
+              if (!modelReady) ...[
+                const SizedBox(width: 6),
+                Tooltip(
+                  message: '语义选择引擎需要下载模型',
+                  child: Icon(
+                    Icons.info_outline,
+                    size: 14,
+                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
             ],
           ),
           // ── 芯片展示区：有结果时展示 ──
           if (selectorState.matches.isNotEmpty) ...[
             const SizedBox(height: 4),
-            Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              children: [
-                for (final match in selectorState.active)
-                  InputChip(
-                    label: Text(
-                      '${match.name} ${(match.score * 100).toStringAsFixed(0)}%',
-                      style: theme.textTheme.labelSmall,
-                    ),
-                    avatar: Icon(_toolIcon(match.id), size: 14),
-                    deleteIcon: const Icon(Icons.close, size: 14),
-                    onDeleted: () => ref
-                        .read(toolSelectorProvider(sessionId).notifier)
-                        .deselect(match.id),
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                // Deselected: faded, tappable to re-add
-                for (final match in selectorState.matches
-                    .where((m) => selectorState.deselected.contains(m.id)))
-                  ActionChip(
-                    label: Text(
-                      match.name,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+            Opacity(
+              opacity: modelReady ? 1.0 : 0.4,
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  for (final match in selectorState.active)
+                    Tooltip(
+                      message: modelReady ? '' : '语义选择引擎需要下载模型',
+                      child: InputChip(
+                        label: Text(
+                          '${match.name} ${(match.score * 100).toStringAsFixed(0)}%',
+                          style: theme.textTheme.labelSmall,
+                        ),
+                        avatar: Icon(_toolIcon(match.id), size: 14),
+                        deleteIcon: const Icon(Icons.close, size: 14),
+                        onDeleted: () => ref
+                            .read(toolSelectorProvider(sessionId).notifier)
+                            .deselect(match.id),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
                       ),
                     ),
-                    onPressed: () => ref
-                        .read(toolSelectorProvider(sessionId).notifier)
-                        .reselect(match.id),
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                  ),
-              ],
+                  // Deselected: faded, tappable to re-add
+                  for (final match in selectorState.matches
+                      .where((m) => selectorState.deselected.contains(m.id)))
+                    ActionChip(
+                      label: Text(
+                        match.name,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      onPressed: () => ref
+                          .read(toolSelectorProvider(sessionId).notifier)
+                          .reselect(match.id),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                ],
+              ),
             ),
           ],
         ],
@@ -1716,13 +1572,16 @@ class _SelectorButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(toolSelectorProvider(sessionId));
     final theme = Theme.of(context);
+    final modelReady = state.modelReady;
 
     final isActive = state.autoSelect;
-    final Color color = isActive
-        ? theme.colorScheme.primary
-        : theme.colorScheme.onSurfaceVariant;
+    final Color color = !modelReady
+        ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4)
+        : isActive
+            ? theme.colorScheme.primary
+            : theme.colorScheme.onSurfaceVariant;
 
-    return Container(
+    final button = Container(
       height: 28,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
@@ -1730,7 +1589,7 @@ class _SelectorButton extends ConsumerWidget {
           color: color.withValues(alpha: 0.3),
           width: 1,
         ),
-        color: isActive
+        color: isActive && modelReady
             ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
             : Colors.transparent,
       ),
@@ -1740,13 +1599,15 @@ class _SelectorButton extends ConsumerWidget {
           // 主按钮区域
           InkWell(
             borderRadius: const BorderRadius.horizontal(left: Radius.circular(14)),
-            onTap: () {
-              final text = ref.read(inputTextProvider(sessionId));
-              if (text.trim().isNotEmpty) {
-                ref.read(toolSelectorProvider(sessionId).notifier)
-                    .manualSelect(text);
-              }
-            },
+            onTap: modelReady
+                ? () {
+                    final text = ref.read(inputTextProvider(sessionId));
+                    if (text.trim().isNotEmpty) {
+                      ref.read(toolSelectorProvider(sessionId).notifier)
+                          .manualSelect(text);
+                    }
+                  }
+                : null,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Row(
@@ -1758,7 +1619,7 @@ class _SelectorButton extends ConsumerWidget {
                     '工具',
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: color,
-                      fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight: isActive && modelReady ? FontWeight.w600 : FontWeight.normal,
                     ),
                   ),
                 ],
@@ -1818,6 +1679,14 @@ class _SelectorButton extends ConsumerWidget {
         ],
       ),
     );
+
+    if (!modelReady) {
+      return Tooltip(
+        message: '语义选择引擎需要下载模型',
+        child: Opacity(opacity: 0.6, child: button),
+      );
+    }
+    return button;
   }
 }
 

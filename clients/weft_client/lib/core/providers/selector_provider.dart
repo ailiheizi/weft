@@ -17,6 +17,7 @@ class ToolSelectorState {
     this.deselected = const {},
     this.autoSelect = true,
     this.loading = false,
+    this.modelReady = false,
   });
 
   /// All matches returned by selector.
@@ -31,6 +32,9 @@ class ToolSelectorState {
   /// Whether a selector call is in progress.
   final bool loading;
 
+  /// Whether the tool-selector service is available and models are loaded.
+  final bool modelReady;
+
   /// Active (visible) matches = all minus deselected.
   List<SelectorMatch> get active =>
       matches.where((m) => !deselected.contains(m.id)).toList();
@@ -43,21 +47,37 @@ class ToolSelectorState {
     Set<String>? deselected,
     bool? autoSelect,
     bool? loading,
+    bool? modelReady,
   }) {
     return ToolSelectorState(
       matches: matches ?? this.matches,
       deselected: deselected ?? this.deselected,
       autoSelect: autoSelect ?? this.autoSelect,
       loading: loading ?? this.loading,
+      modelReady: modelReady ?? this.modelReady,
     );
   }
 }
 
 class ToolSelectorNotifier extends StateNotifier<ToolSelectorState> {
-  ToolSelectorNotifier(this._api) : super(const ToolSelectorState());
+  ToolSelectorNotifier(this._api) : super(const ToolSelectorState()) {
+    checkModelStatus();
+  }
 
   final SelectorApi _api;
   Timer? _debounce;
+
+  /// Check if the tool-selector service is available and models are loaded.
+  Future<void> checkModelStatus() async {
+    try {
+      final available = await _api.checkStatus();
+      if (!mounted) return;
+      state = state.copyWith(modelReady: available);
+    } catch (_) {
+      if (!mounted) return;
+      state = state.copyWith(modelReady: false);
+    }
+  }
 
   /// Called on text change (debounced). Triggers selector if autoSelect is on.
   void onTextChanged(String text) {

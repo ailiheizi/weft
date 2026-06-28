@@ -287,6 +287,23 @@ class SelectorApi {
     }
   }
 
+  /// Check if the tool-selector service is available and models are ready.
+  /// Returns true if the service responds and reports available status.
+  Future<bool> checkStatus() async {
+    try {
+      final resp = await Dio().get<Map<String, dynamic>>(
+        'http://127.0.0.1:17860/status',
+        options: Options(
+          receiveTimeout: const Duration(seconds: 3),
+          sendTimeout: const Duration(seconds: 2),
+        ),
+      );
+      return resp.data?['available'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// List available candidate libraries.
   Future<List<String>> listLibraries() async {
     try {

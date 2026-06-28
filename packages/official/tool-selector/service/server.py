@@ -466,7 +466,12 @@ def run_http_server(selector, loaded_libs, port):
                 self._respond(500, {"error": str(e)})
 
         def do_GET(self):
-            self._respond(200, {"ready": True, "libraries": loaded_libs})
+            if self.path == "/status":
+                from src.encoder_onnx import check_models_available
+                status = check_models_available()
+                self._respond(200, status)
+            else:
+                self._respond(200, {"ready": True, "libraries": loaded_libs})
 
         def _respond(self, status, data):
             body = json.dumps(data, ensure_ascii=False).encode('utf-8')

@@ -18,11 +18,40 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # ---- 0. Detect which components changed vs previous tag -------------------
+  changes:
+    name: detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      core: ${{ steps.diff.outputs.core }}
+      packages: ${{ steps.diff.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Diff against previous tag
+        id: diff
+        shell: bash
+        run: |
+          prev=$(git tag --sort=-v:refname | grep -v "^$(git describe --tags --exact-match 2>/dev/null)$" | head -1)
+          if [ -z "$prev" ]; then
+            echo "core=true" >> "$GITHUB_OUTPUT"
+            echo "packages=true" >> "$GITHUB_OUTPUT"
+          else
+            core_changed=$(git diff --name-only "$prev"..HEAD -- core/ | head -1)
+            pkg_changed=$(git diff --name-only "$prev"..HEAD -- packages/official/ scripts/build-wasm-packages.sh | head -1)
+            echo "core=$( [ -n \"$core_changed\" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "packages=$( [ -n \"$pkg_changed\" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+          fi
+          echo "prev=$prev core=${{ steps.diff.outputs.core || 'pending' }} packages=${{ steps.diff.outputs.packages || 'pending' }}"
+
   # ---- 1. Build the native core binaries -----------------------------------
   # Windows-only for now. macOS/Linux targets are unverified — add them back to
   # the matrix once they're tested.
   core:
     name: core (${{ matrix.target }})
+    needs: [changes]
+    if: needs.changes.outputs.core == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -77,6 +106,8 @@ jobs:
   # ---- 2. Build all WASM packages (platform-independent) --------------------
   packages:
     name: wasm packages
+    needs: [changes]
+    if: needs.changes.outputs.packages == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -103,6 +134,7 @@ jobs:
   # bundled weft-core (sidecar) — no separate install needed.
   app-windows:
     name: desktop app (windows)
+    needs: [changes]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -199,10 +231,13 @@ jobs:
   # ---- 3. Publish the GitHub Release with all artifacts ---------------------
   release:
     name: publish release
-    needs: [core, packages, app-windows]
-    # Only publish for real tag pushes. A manual workflow_dispatch can still run
-    # the build jobs above for testing, but has no tag for the release to attach to.
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: [changes, core, packages, app-windows]
+    # Run even if core/packages were skipped (no changes). Only skip if a job failed.
+    if: |
+      always() &&
+      startsWith(github.ref, 'refs/tags/') &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
