@@ -262,14 +262,22 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   String _modelQuery = '';
 
   Future<void> _fetchModels() async {
+    // 取第一个已启用且非空的 key(跳过 disabled 的)。
+    final activeKey = _keys
+        .where((k) => k.enabled && k.keyCtrl.text.trim().isNotEmpty)
+        .map((k) => k.keyCtrl.text.trim())
+        .firstOrNull ?? '';
+    if (activeKey.isEmpty) {
+      setState(() => _fetchError = '请先添加 API Key');
+      return;
+    }
     setState(() {
       _fetchingModels = true;
       _fetchError = null;
     });
     try {
-      final key = _keys.isNotEmpty ? _keys.first.keyCtrl.text.trim() : '';
       final models = await widget.onFetchModels(
-          _urlCtrl.text.trim(), key, _format);
+          _urlCtrl.text.trim(), activeKey, _format);
       setState(() {
         _availableModels
           ..clear()

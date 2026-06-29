@@ -254,6 +254,39 @@ pub fn build_generation_store_map(
     generation_store_map
 }
 
+/// Check if a process with the given PID is still alive.
+#[cfg(windows)]
+fn is_process_alive(pid: u32) -> bool {
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows_sys::Win32::Foundation::CloseHandle;
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle.is_null() {
+            return false;
+        }
+        // Process handle obtained → still alive (or just exited but handle valid).
+        // Check exit code to distinguish.
+        let mut exit_code: u32 = 0;
+        let still_active = if windows_sys::Win32::System::Threading::GetExitCodeProcess(
+            handle,
+            &mut exit_code as *mut u32,
+        ) != 0
+        {
+            exit_code == 259 // STILL_ACTIVE
+        } else {
+            false
+        };
+        CloseHandle(handle);
+        still_active
+    }
+}
+
+#[cfg(not(windows))]
+fn is_process_alive(pid: u32) -> bool {
+    // Unix: signal 0 checks existence without killing.
+    unsafe { libc::kill(pid as i32, 0) == 0 }
+}
+
 
 pub async fn run_server() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -327,6 +360,25 @@ pub async fn run_server() -> anyhow::Result<()> {
                     if let Some(val) = args.get(i + 1) {
                         if let Ok(port) = val.parse::<u16>() {
                             config.core.port = port;
+                        }
+                        i += 2;
+                    } else {
+                        i += 1;
+                    }
+                }
+                "--parent-pid" => {
+                    if let Some(val) = args.get(i + 1) {
+                        if let Ok(ppid) = val.parse::<u32>() {
+                            // Watch parent process — exit if it dies (handles crash/kill).
+                            std::thread::spawn(move || {
+                                loop {
+                                    std::thread::sleep(std::time::Duration::from_secs(2));
+                                    if !is_process_alive(ppid) {
+                                        tracing::info!("Parent process (pid {}) exited, shutting down", ppid);
+                                        std::process::exit(0);
+                                    }
+                                }
+                            });
                         }
                         i += 2;
                     } else {

@@ -113,11 +113,21 @@ class CoreRepository {
   }
 
   Future<ProviderConfig> createProvider(ProviderConfig config) async {
-    final res = await _dio.post<Map<String, dynamic>>(
-      '/api/providers',
-      data: config.toJson(),
-    );
-    return ProviderConfig.fromJson(res.data!);
+    try {
+      final res = await _dio.post<Map<String, dynamic>>(
+        '/api/providers',
+        data: config.toJson(),
+      );
+      return ProviderConfig.fromJson(res.data!);
+    } on DioException catch (e) {
+      // Provider 已存在(409):回退为更新(upsert 语义)。这样 onboarding
+      // 或重复保存同名 provider 时不会卡在"already exists"错误,而是覆盖配置。
+      if (e.response?.statusCode == 409) {
+        await updateProvider(config.name, config);
+        return config;
+      }
+      rethrow;
+    }
   }
 
   Future<void> updateProvider(String name, ProviderConfig config) async {

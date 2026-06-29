@@ -756,7 +756,9 @@ pub fn build_service_config(package: &DiscoveredPackage) -> Result<ServiceConfig
     })?;
     let absolute_entry_path =
         std::fs::canonicalize(entry_path).unwrap_or_else(|_| entry_path.clone());
+
     let (command, args) = resolve_service_command(&absolute_entry_path);
+
     let startup_mode = package
         .manifest
         .runtime_contract

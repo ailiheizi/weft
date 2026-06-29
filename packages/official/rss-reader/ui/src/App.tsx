@@ -102,14 +102,17 @@ export default function App() {
 
   const handleAddFeed = async (url: string) => {
     await api.addFeed(url);
-    loadFeeds();
+    await loadFeeds();
+    // Refresh in background — don't block the UI.
+    api.refreshAll().then(() => loadArticles());
   };
 
   const handleRemoveFeed = async (feedId: number) => {
     await api.removeFeed(feedId);
     setFeeds(prev => prev.filter(f => f.id !== feedId));
     if (selectedFeedId === feedId) setSelectedFeedId(null);
-    loadArticles();
+    // Reload articles to reflect removal immediately.
+    await loadArticles();
   };
 
   const handleBackToList = () => {

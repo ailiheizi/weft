@@ -39,7 +39,7 @@ jobs:
             echo "packages=true" >> "$GITHUB_OUTPUT"
           else
             core_changed=$(git diff --name-only "$prev"..HEAD -- core/ | head -1)
-            pkg_changed=$(git diff --name-only "$prev"..HEAD -- packages/official/ scripts/build-wasm-packages.sh | head -1)
+            pkg_changed=$(git diff --name-only "$prev"..HEAD -- packages/official/ packages/installed/ scripts/build-wasm-packages.sh | head -1)
             echo "core=$( [ -n \"$core_changed\" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "packages=$( [ -n \"$pkg_changed\" ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
           fi
@@ -158,6 +158,12 @@ jobs:
         shell: bash
         run: bash scripts/build-wasm-packages.sh
 
+      - name: Build package UIs (rss-reader)
+        working-directory: packages/official/rss-reader/ui
+        run: |
+          npm install
+          npm run build
+
       - name: Build Flutter client
         working-directory: clients/weft_client
         # The webview_windows plugin still includes <experimental/coroutine>,
@@ -219,14 +225,72 @@ jobs:
                    "$bundle/packages/official/$name/src" \
                    "$bundle/packages/official/$name/Cargo.toml" \
                    "$bundle/packages/official/$name/.gitignore"
+            # Strip UI source/dev files; core only needs ui/dist/.
+            if [ -d "$bundle/packages/official/$name/ui" ]; then
+              rm -rf "$bundle/packages/official/$name/ui/node_modules" \
+                     "$bundle/packages/official/$name/ui/src" \
+                     "$bundle/packages/official/$name/ui/.gitignore" \
+                     "$bundle/packages/official/$name/ui/package.json" \
+                     "$bundle/packages/official/$name/ui/package-lock.json" \
+                     "$bundle/packages/official/$name/ui/tsconfig.json" \
+                     "$bundle/packages/official/$name/ui/tsconfig.*.json" \
+                     "$bundle/packages/official/$name/ui/vite.config.*" \
+                     "$bundle/packages/official/$name/ui/eslint.config.*" \
+                     "$bundle/packages/official/$name/ui/index.html"
+            fi
+          done
+
+          # 3) Installed packages — built WASM packages from packages/installed/.
+          for d in packages/installed/*/; do
+            name=$(basename "$d")
+            [ -f "$d/package.toml" ] || continue
+            mkdir -p "$bundle/packages/installed/$name"
+            cp "$d/package.toml" "$bundle/packages/installed/$name"/
+            # Compiled wasm (if built by the WASM step above).
+            [ -f "$d/package.wasm" ] && cp "$d/package.wasm" "$bundle/packages/installed/$name"/
+            # Service runtime assets (if any).
+            [ -d "$d/service" ] && cp -r "$d/service" "$bundle/packages/installed/$name"/
+            [ -d "$d/scenes" ] && cp -r "$d/scenes" "$bundle/packages/installed/$name"/
+            # Remove build artifacts that shouldn't ship.
+            rm -rf "$bundle/packages/installed/$name/target" \
+                   "$bundle/packages/installed/$name/src" \
+                   "$bundle/packages/installed/$name/Cargo.toml" \
+                   "$bundle/packages/installed/$name/.gitignore"
           done
           cp config.example.toml "$bundle"/ 2>/dev/null || true
           7z a "$bundle.zip" "./$bundle/*"
 
+      - name: Assemble full bundle (with tool-selector AI runtime)
+        shell: bash
+        run: |
+          bundle="weft-desktop-windows-x86_64"
+          full="weft-desktop-windows-x86_64-full"
+          # Start from the slim bundle.
+          cp -r "$bundle" "$full"
+          # Download the prebuilt tool-selector runtime + ONNX model from the
+          # universal-selector release into the package's runtime/ dir.
+          ts="$full/packages/official/tool-selector/runtime"
+          mkdir -p "$ts/models"
+          base="https://github.com/ailiheizi/universal-selector/releases/download/v0.1.0"
+          curl -fL --retry 3 -o "$ts/tool-selector.exe" "$base/tool-selector-windows-x86_64.exe"
+          curl -fL --retry 3 -o "$ts/models/model_int8.onnx" "$base/model_int8.onnx"
+          curl -fL --retry 3 -o "$ts/models/tokenizer.json" "$base/tokenizer.json"
+          curl -fL --retry 3 -o "$ts/models/tokenizer_config.json" "$base/tokenizer_config.json"
+          # Point the package entry at the native exe (full edition only).
+          tsel="$full/packages/official/tool-selector/package.toml"
+          if [ -f "$tsel" ]; then
+            sed -i 's#^entry = .*#entry = "runtime/tool-selector.exe"#' "$tsel"
+            sed -i 's#^startup_command = .*#startup_command = "runtime/tool-selector.exe"#' "$tsel"
+            sed -i 's#^startup_args = .*#startup_args = ["--http", "--port", "17860", "--libraries-dir", "service/libraries"]#' "$tsel"
+          fi
+          7z a "$full.zip" "./$full/*"
+
       - uses: actions/upload-artifact@v4
         with:
           name: weft-desktop-windows-x86_64
-          path: weft-desktop-windows-x86_64.zip
+          path: |
+            weft-desktop-windows-x86_64.zip
+            weft-desktop-windows-x86_64-full.zip
 
   # ---- 3. Publish the GitHub Release with all artifacts ---------------------
   release:

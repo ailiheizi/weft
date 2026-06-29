@@ -1,4 +1,4 @@
-import 'dart:io' show Platform;
+import 'dart:io' show Directory, Platform, Process;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -216,10 +216,16 @@ class SettingsScreen extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final dir = await getApplicationSupportDirectory();
-      final ok = await launchUrl(Uri.file(dir.path));
-      if (!ok) {
-        messenger.showSnackBar(
-            SnackBar(content: Text('无法打开：${dir.path}')));
+      Directory(dir.path).createSync(recursive: true);
+      if (Platform.isWindows) {
+        await Process.run('explorer.exe', [dir.path]);
+      } else {
+        final ok = await launchUrl(Uri.directory(dir.path))
+            .timeout(const Duration(seconds: 5), onTimeout: () => false);
+        if (!ok) {
+          messenger.showSnackBar(
+              SnackBar(content: Text('无法打开：${dir.path}')));
+        }
       }
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('失败：$e')));

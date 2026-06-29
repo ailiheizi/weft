@@ -1,5 +1,6 @@
 """ONNX-based encoder for fast inference (5ms vs 2000ms PyTorch)."""
 
+import os
 import numpy as np
 import onnxruntime as ort
 from pathlib import Path
@@ -68,7 +69,14 @@ class OnnxEncoder:
         """
         self.max_length = max_length
         if model_dir is None:
-            model_dir = str(Path(__file__).resolve().parent.parent / "models")
+            model_dir = os.environ.get("SELECTOR_MODELS_DIR")
+        if model_dir is None:
+            import sys as _sys
+            if getattr(_sys, "frozen", False):
+                # PyInstaller bundle: models live next to the exe (./models).
+                model_dir = str(Path(_sys.executable).resolve().parent / "models")
+            else:
+                model_dir = str(Path(__file__).resolve().parent.parent / "models")
 
         model_dir = Path(model_dir)
         model_file = "model_int8.onnx" if use_int8 else "model.onnx"

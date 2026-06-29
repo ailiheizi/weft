@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -35,6 +36,7 @@ class _CoreShutdownListener extends WindowListener {
       await windowManager.setPreventClose(false);
       await windowManager.destroy();
     }
+    exit(0);
   }
 }
 

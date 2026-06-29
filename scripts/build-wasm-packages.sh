@@ -13,16 +13,21 @@ OUT_DIR="${1:-}"
 rustup target add wasm32-wasip1 >/dev/null 2>&1 || true
 
 built=0
-for manifest in packages/official/*/Cargo.toml; do
+
+# Build from both packages/official/ and packages/installed/ directories.
+for manifest in packages/official/*/Cargo.toml packages/installed/*/Cargo.toml; do
+    [[ -f "$manifest" ]] || continue
     pkg_dir="$(dirname "$manifest")"
     pkg_name="$(basename "$pkg_dir")"
+    # Determine the category (official or installed) for output layout.
+    pkg_category="$(basename "$(dirname "$pkg_dir")")"
 
     # Only build packages that declare package.wasm as their entry.
     if ! grep -q 'entry *= *"package.wasm"' "$pkg_dir/package.toml" 2>/dev/null; then
         continue
     fi
 
-    echo ">> building $pkg_name"
+    echo ">> building $pkg_name (from $pkg_category)"
     cargo build --manifest-path "$manifest" --target wasm32-wasip1 --release
 
     # crate name is package-<dir>; cargo emits package_<dir>.wasm

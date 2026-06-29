@@ -68,6 +68,8 @@ class _ImportPackageDialogState extends ConsumerState<ImportPackageDialog> {
     final dir = ref.read(packageInstallProvider).installedDir;
     if (dir != null) {
       try {
+        // 确保目录存在,避免打开一个尚未创建的路径。
+        Directory(dir).createSync(recursive: true);
         if (Platform.isWindows) {
           await Process.start('explorer', [dir]);
         } else if (Platform.isMacOS) {
