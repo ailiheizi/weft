@@ -272,7 +272,7 @@ jobs:
           ts="$full/packages/official/tool-selector/runtime"
           mkdir -p "$ts/models"
           base="https://github.com/ailiheizi/universal-selector/releases/download/v0.1.0"
-          curl -fL --retry 3 -o "$ts/tool-selector.exe" "$base/tool-selector-windows-x86_64.exe"
+          curl -fL --retry 3 -o "$ts/tool-selector.exe" "$base/tool-selector.exe"
           curl -fL --retry 3 -o "$ts/models/model_int8.onnx" "$base/model_int8.onnx"
           curl -fL --retry 3 -o "$ts/models/tokenizer.json" "$base/tokenizer.json"
           curl -fL --retry 3 -o "$ts/models/tokenizer_config.json" "$base/tokenizer_config.json"
