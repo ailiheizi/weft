@@ -282,6 +282,9 @@ jobs:
             sed -i 's#^entry = .*#entry = "runtime/tool-selector.exe"#' "$tsel"
             sed -i 's#^startup_command = .*#startup_command = "runtime/tool-selector.exe"#' "$tsel"
             sed -i 's#^startup_args = .*#startup_args = ["--http", "--port", "17860", "--libraries-dir", "service/libraries"]#' "$tsel"
+            # Full edition ships the model, so auto-start the selector service
+            # (lets the client's /status probe succeed and light up the chips).
+            sed -i 's#^startup_mode = .*#startup_mode = "persistent"#' "$tsel"
           fi
           7z a "$full.zip" "./$full/*"
 

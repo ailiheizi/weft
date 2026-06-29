@@ -1,0 +1,118 @@
+schema_version = 2
+active_scene = ""
+
+[app_runtime]
+profile = "developer"
+scene = ""
+workspace = "./workspace"
+default_model = "deepseek-chat"
+
+[secrets]
+
+[features]
+enabled = []
+disabled = []
+channels_enabled = true
+mcp_enabled = true
+skills_enabled = true
+enable_chat = true
+enable_tools = false
+enable_memory = true
+
+[packages]
+enabled = [
+    "agent-runtime",
+    "prompt-system",
+    "skills-runtime",
+    "mcp-client",
+    "channel-core",
+    "weft-claw-ui",
+    "workflow-orchestrator",
+    "workflow-template-devteam",
+    "team-runtime",
+    "team-task-board",
+    "tool-runtime-core",
+    "tool-shell",
+    "tool-files",
+    "tool-web",
+    "tool-git",
+    "session-events",
+]
+disabled = []
+
+[binding_overrides."team.taskboard"]
+provider = "team-task-board"
+reason = ""
+package = ""
+version = ""
+sha512 = ""
+
+[binding_overrides."team.context.shared"]
+provider = "team-runtime"
+reason = ""
+package = ""
+version = ""
+sha512 = ""
+
+[binding_overrides."team.delegate"]
+provider = "agent-runtime"
+reason = ""
+package = ""
+version = ""
+sha512 = ""
+
+[binding_overrides."workflow.template.devteam"]
+provider = "workflow-template-devteam"
+reason = ""
+package = ""
+version = ""
+sha512 = ""
+
+[binding_overrides."session.events"]
+provider = "session-events"
+reason = ""
+package = ""
+version = ""
+sha512 = ""
+
+[binding_overrides."team.runtime"]
+provider = "team-runtime"
+reason = ""
+package = ""
+version = ""
+sha512 = ""
+
+[binding_overrides."team.handoff"]
+provider = "team-task-board"
+reason = ""
+package = ""
+version = ""
+sha512 = ""
+
+[binding_overrides."ext.skills"]
+provider = "skills-runtime"
+reason = ""
+package = ""
+version = ""
+sha512 = ""
+
+[binding_overrides."team.role.catalog"]
+provider = "team-runtime"
+reason = ""
+package = ""
+version = ""
+sha512 = ""
+
+[binding_overrides."channel.bridge"]
+provider = "channel-core"
+reason = ""
+package = ""
+version = ""
+sha512 = ""
+
+[binding_overrides."ext.mcp"]
+provider = "mcp-client"
+reason = ""
+package = ""
+version = ""
+sha512 = ""

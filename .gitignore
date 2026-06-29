@@ -52,6 +52,13 @@ packages/official/*/runtime-debug/
 **/*.bak
 **/*.bak-*
 
+# Factory-default runtime state for shipped products (committed so the
+# desktop bundle has an active generation out of the box).
+!packages/weft-claw/lock.toml
+!packages/weft-claw/generation-store.toml
+!packages/ai-director/lock.toml
+!packages/ai-director/generation-store.toml
+
 # ===== 本地配置 / 密钥（只保留 config.example.toml）=====
 config.toml
 config.dev.toml
@@ -61,6 +68,11 @@ config/config.dev.toml
 *.key
 *.pem
 *.p12
+
+# Factory-default product config (committed for out-of-box activation).
+!packages/weft-claw/config.toml
+!packages/ai-director/config.toml
+!packages/weft-code/config.toml
 
 # ===== 数据库 / 日志 / 临时 =====
 *.log

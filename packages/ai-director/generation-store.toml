@@ -1,0 +1,292 @@
+schema_version = 1
+active = 7
+previous = 6
+next_id = 8
+
+[[generations]]
+id = 6
+app_name = "ai-director"
+version = "0.1.0"
+capabilities = [
+    "agent.runtime",
+    "prompt.system",
+    "memory.store",
+    "ext.skills",
+    "ext.mcp",
+    "channel.bridge",
+    "team.runtime",
+    "team.taskboard",
+    "team.delegate",
+    "team.role.catalog",
+    "team.context.shared",
+    "workflow.orchestration",
+    "workflow.template.creative",
+    "session.events",
+    "core.execution",
+    "director.plan",
+    "director.turn",
+]
+enabled_features = []
+scene = ""
+profile = "developer"
+binding_set_id = "binding-set:sha256:16a5bd88ff4a8678e253aeade557fa01a992ba787e99853da4d6dbc6dfcb9729"
+closure_id = "closure:sha256:56c02d8d8aee773f8fd1512a252d6854296c0e71223a6c5694ebefe572da1e2d"
+lock_digest = ""
+lock_path = 'D:\windows\code\project\RELIK-plug\packages\ai-director\lock.toml'
+created_by = ""
+status = "rollback"
+validation_results = []
+created_at = 0
+
+[[generations.bindings]]
+capability = "agent.runtime"
+provider = "agent-runtime"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "prompt.system"
+provider = "prompt-system"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "memory.store"
+provider = "memory-store"
+mutable = true
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "ext.skills"
+provider = "skills-runtime"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "ext.mcp"
+provider = "mcp-client"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "channel.bridge"
+provider = "channel-core"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.runtime"
+provider = "team-runtime"
+mutable = false
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.taskboard"
+provider = "team-task-board"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.delegate"
+provider = "agent-runtime"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.role.catalog"
+provider = "creative-role-catalog"
+mutable = false
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.context.shared"
+provider = "team-runtime"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "workflow.orchestration"
+provider = "workflow-orchestrator"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "workflow.template.creative"
+provider = "workflow-template-creative"
+mutable = false
+source = "config-override"
+
+[[generations.bindings]]
+capability = "session.events"
+provider = "session-events"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "core.execution"
+provider = "core"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "director.plan"
+provider = "ai-director"
+mutable = false
+source = "declaration-default"
+
+[[generations]]
+id = 7
+app_name = "ai-director"
+version = "0.1.0"
+capabilities = [
+    "agent.runtime",
+    "prompt.system",
+    "memory.store",
+    "ext.skills",
+    "ext.mcp",
+    "channel.bridge",
+    "team.runtime",
+    "team.taskboard",
+    "team.delegate",
+    "team.role.catalog",
+    "team.context.shared",
+    "workflow.orchestration",
+    "workflow.template.creative",
+    "session.events",
+    "core.execution",
+    "director.plan",
+    "director.turn",
+]
+enabled_features = []
+scene = ""
+profile = "developer"
+binding_set_id = "binding-set:sha256:48d3b736b582aaf825b648a345fd3673c807940288a1ccaab1a527a11b89f899"
+closure_id = "closure:sha256:391560a060f88a5c3bc6a978329eed1785b4bc5a3ea3a0801e4f8b20e2b62aa4"
+lock_digest = ""
+lock_path = "generations/7.lock.toml"
+parent_generation = 6
+created_by = "api"
+status = "active"
+created_at = 1781347200
+
+[[generations.bindings]]
+capability = "agent.runtime"
+provider = "agent-runtime"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "prompt.system"
+provider = "prompt-system"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "memory.store"
+provider = "memory-store"
+mutable = true
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "ext.skills"
+provider = "skills-runtime"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "ext.mcp"
+provider = "mcp-client"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "channel.bridge"
+provider = "channel-core"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.runtime"
+provider = "team-runtime"
+mutable = false
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.taskboard"
+provider = "team-task-board"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.delegate"
+provider = "agent-runtime"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.role.catalog"
+provider = "creative-role-catalog"
+mutable = false
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.context.shared"
+provider = "team-runtime"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "workflow.orchestration"
+provider = "workflow-orchestrator"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "workflow.template.creative"
+provider = "workflow-template-creative"
+mutable = false
+source = "config-override"
+
+[[generations.bindings]]
+capability = "session.events"
+provider = "session-events"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "core.execution"
+provider = "core"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "director.plan"
+provider = "ai-director"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "director.turn"
+provider = "ai-director"
+mutable = false
+source = "declaration-default"
+
+[[generations.validation_results]]
+check = "boot"
+passed = true
+message = "Bindings present"
+
+[[generations.validation_results]]
+check = "capabilities"
+passed = true
+message = "17 capabilities declared"
+
+[[generations.validation_results]]
+check = "binding-coverage"
+passed = true
+message = "All capabilities have bindings"
+
+[[generations.validation_results]]
+check = "registry-coverage"
+passed = true
+message = "All capabilities found in registry"

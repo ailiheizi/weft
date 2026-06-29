@@ -1,0 +1,292 @@
+schema_version = 1
+active = 4
+previous = 1
+next_id = 5
+
+[[generations]]
+id = 1
+app_name = "weft-claw"
+version = "0.1.0"
+capabilities = [
+    "weft_claw.turn",
+    "agent.runtime",
+    "core.execution",
+    "prompt.system",
+    "memory.store",
+    "ext.skills",
+    "ext.mcp",
+    "channel.bridge",
+    "team.runtime",
+    "team.taskboard",
+    "team.handoff",
+    "team.role.catalog",
+    "team.delegate",
+    "team.context.shared",
+    "workflow.template.devteam",
+    "ui.surface",
+    "session.events",
+]
+enabled_features = []
+scene = ""
+profile = "developer"
+binding_set_id = "binding-set:sha256:b4078325a6d415720e9377563da0876c7c84533d3d2b3625ae0a67c80e51e818"
+closure_id = "closure:sha256:77a4f7ad8d161506212c6f365cc72268e74636a01bf11a68cb755e1e8f32e806"
+lock_digest = ""
+lock_path = 'D:\windows\code\project\WEFT-plug\packages\weft-claw\lock.toml'
+created_by = ""
+status = "rollback"
+validation_results = []
+created_at = 0
+
+[[generations.bindings]]
+capability = "weft_claw.turn"
+provider = "weft-claw"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "agent.runtime"
+provider = "agent-runtime"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "core.execution"
+provider = "core"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "prompt.system"
+provider = "prompt-system"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "memory.store"
+provider = "memory-store"
+mutable = true
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "ext.skills"
+provider = "skills-runtime"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "ext.mcp"
+provider = "mcp-client"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "channel.bridge"
+provider = "channel-core"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.runtime"
+provider = "team-runtime"
+mutable = false
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.taskboard"
+provider = "team-task-board"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.handoff"
+provider = "team-task-board"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.role.catalog"
+provider = "team-runtime"
+mutable = false
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.delegate"
+provider = "agent-runtime"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.context.shared"
+provider = "team-runtime"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "workflow.template.devteam"
+provider = "workflow-template-devteam"
+mutable = false
+source = "config-override"
+
+[[generations.bindings]]
+capability = "ui.surface"
+provider = "weft-claw"
+mutable = false
+source = "declaration-default"
+
+[[generations]]
+id = 4
+app_name = "weft-claw"
+version = "0.1.0"
+capabilities = [
+    "weft_claw.turn",
+    "agent.runtime",
+    "core.execution",
+    "prompt.system",
+    "memory.store",
+    "ext.skills",
+    "ext.mcp",
+    "channel.bridge",
+    "team.runtime",
+    "team.taskboard",
+    "team.handoff",
+    "team.role.catalog",
+    "team.delegate",
+    "team.context.shared",
+    "workflow.template.devteam",
+    "ui.surface",
+    "session.events",
+]
+enabled_features = []
+scene = ""
+profile = "developer"
+binding_set_id = "binding-set:sha256:97f75aab92777699782e838fd3d33ee54c0abcda3abcdd17a94be892769daa90"
+closure_id = "closure:sha256:9ab8ec7c671d036149c1cb695fda0b28d06ec7616cb178fbc4a366d11c18075e"
+lock_digest = ""
+lock_path = "generations/4.lock.toml"
+parent_generation = 1
+created_by = "api"
+status = "active"
+created_at = 1780580271
+
+[[generations.bindings]]
+capability = "weft_claw.turn"
+provider = "weft-claw"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "agent.runtime"
+provider = "agent-runtime"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "core.execution"
+provider = "core"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "prompt.system"
+provider = "prompt-system"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "memory.store"
+provider = "memory-store"
+mutable = true
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "ext.skills"
+provider = "skills-runtime"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "ext.mcp"
+provider = "mcp-client"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "channel.bridge"
+provider = "channel-core"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.runtime"
+provider = "team-runtime"
+mutable = false
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.taskboard"
+provider = "team-task-board"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.handoff"
+provider = "team-task-board"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.role.catalog"
+provider = "team-runtime"
+mutable = false
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.delegate"
+provider = "agent-runtime"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "team.context.shared"
+provider = "team-runtime"
+mutable = true
+source = "config-override"
+
+[[generations.bindings]]
+capability = "workflow.template.devteam"
+provider = "workflow-template-devteam"
+mutable = false
+source = "config-override"
+
+[[generations.bindings]]
+capability = "ui.surface"
+provider = "weft-claw"
+mutable = false
+source = "declaration-default"
+
+[[generations.bindings]]
+capability = "session.events"
+provider = "session-events"
+mutable = true
+source = "config-override"
+
+[[generations.validation_results]]
+check = "boot"
+passed = true
+message = "Bindings present"
+
+[[generations.validation_results]]
+check = "capabilities"
+passed = true
+message = "17 capabilities declared"
+
+[[generations.validation_results]]
+check = "binding-coverage"
+passed = true
+message = "All capabilities have bindings"
+
+[[generations.validation_results]]
+check = "registry-coverage"
+passed = true
+message = "All capabilities found in registry"

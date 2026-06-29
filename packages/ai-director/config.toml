@@ -1,0 +1,52 @@
+schema_version = 2
+
+[app_runtime]
+profile = "developer"
+workspace = "./workspace"
+default_model = "deepseek-chat"
+
+[features]
+enabled = []
+disabled = []
+channels_enabled = true
+mcp_enabled = true
+skills_enabled = true
+enable_chat = true
+enable_memory = true
+
+[packages]
+enabled = ["agent-runtime", "prompt-system", "memory-store", "skills-runtime", "mcp-client", "channel-core", "workflow-orchestrator", "workflow-template-creative", "team-runtime", "team-task-board", "session-events", "creative-role-catalog", "ai-director", "tool-runtime-core", "tool-shell", "tool-files", "tool-web", "tool-git"]
+disabled = []
+
+[binding_overrides."ext.skills"]
+provider = "skills-runtime"
+
+[binding_overrides."ext.mcp"]
+provider = "mcp-client"
+
+[binding_overrides."channel.bridge"]
+provider = "channel-core"
+
+[binding_overrides."team.runtime"]
+provider = "team-runtime"
+
+[binding_overrides."team.taskboard"]
+provider = "team-task-board"
+
+[binding_overrides."team.handoff"]
+provider = "team-task-board"
+
+[binding_overrides."team.role.catalog"]
+provider = "creative-role-catalog"
+
+[binding_overrides."team.delegate"]
+provider = "agent-runtime"
+
+[binding_overrides."team.context.shared"]
+provider = "team-runtime"
+
+[binding_overrides."workflow.template.creative"]
+provider = "workflow-template-creative"
+
+[binding_overrides."session.events"]
+provider = "session-events"

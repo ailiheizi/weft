@@ -1,0 +1,765 @@
+lock_version = 2
+app = "weft-claw"
+generation = 4
+status = "active"
+profile = "developer"
+scene = ""
+scene_digest = ""
+binding_set_id = "binding-set:sha256:97f75aab92777699782e838fd3d33ee54c0abcda3abcdd17a94be892769daa90"
+closure_id = "closure:sha256:9ab8ec7c671d036149c1cb695fda0b28d06ec7616cb178fbc4a366d11c18075e"
+closure_digest = "sha256:9ab8ec7c671d036149c1cb695fda0b28d06ec7616cb178fbc4a366d11c18075e"
+store_generation_id = ""
+trust_level = ""
+dev_unsealed = false
+features = []
+
+[inputs]
+declaration_schema_version = 2
+config_schema_version = 2
+declaration_digest = "5a3a4787056d1a6a7fca852e479480bd12d339934bdff32d5918395145a082840fc400dadf06495d20636a0bb248260fdd6808a353a34e018845dbf9ad28b190"
+config_digest = "5f907cec4f68068d7a0c2c47ef9ad3892cb910d238ffc7cdb383186472e09f925fb9ed733d14eeb15782ed5f9f633f2241c9bd6e3beb7755332e047a509fea54"
+scene_digest = ""
+package_index_digest = ""
+package_server_snapshot_digest = ""
+
+[assembly]
+enabled_features = []
+selected_packages = [
+    "agent-runtime",
+    "channel-core",
+    "core",
+    "mcp-client",
+    "memory-store",
+    "prompt-system",
+    "weft-claw",
+    "weft-claw-ui",
+    "session-events",
+    "skills-runtime",
+    "team-runtime",
+    "team-task-board",
+    "workflow-orchestrator",
+    "workflow-template-devteam",
+]
+scene = ""
+scene_digest = ""
+binding_set_id = "binding-set:sha256:97f75aab92777699782e838fd3d33ee54c0abcda3abcdd17a94be892769daa90"
+closure_id = "closure:sha256:9ab8ec7c671d036149c1cb695fda0b28d06ec7616cb178fbc4a366d11c18075e"
+closure_digest = "sha256:9ab8ec7c671d036149c1cb695fda0b28d06ec7616cb178fbc4a366d11c18075e"
+
+[[packages]]
+name = "weft-claw"
+version = "current"
+runtime = "wasm"
+sha512 = "49d50249c7a2601babe6d84644d6c289a6574b34b2162a702ef09281dc7915a9a1824d5bf8a0b6df7852e09eb6b40a21b2b41d95135747900f62fcb22c20e445"
+source = "packages/official/weft-claw"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+source_public_keys = []
+package_kind = "product,provider"
+manifest_digest = "49d50249c7a2601babe6d84644d6c289a6574b34b2162a702ef09281dc7915a9a1824d5bf8a0b6df7852e09eb6b40a21b2b41d95135747900f62fcb22c20e445"
+artifact_digest = "49d50249c7a2601babe6d84644d6c289a6574b34b2162a702ef09281dc7915a9a1824d5bf8a0b6df7852e09eb6b40a21b2b41d95135747900f62fcb22c20e445"
+artifact_set_id = ""
+store_object_id = "sha512-49d50249c7a2601babe6d84644d6c289a6574b34b2162a702ef09281dc7915a9a1824d5bf8a0b6df7852e09eb6b40a21b2b41d95135747900f62fcb22c20e445-weft-claw-current"
+store_path = ""
+closure_id = ""
+entry_kind = "wasm"
+runtime_provider = "weft-claw"
+provides = [
+    "weft_claw.turn",
+    "ui.surface",
+]
+requires = [
+    "agent.runtime",
+    "ext.skills",
+    "ext.mcp",
+    "memory.store",
+    "tool.runtime",
+    "session.events",
+]
+roles = [
+    "product",
+    "provider",
+]
+capabilities = [
+    "weft_claw.turn",
+    "ui.surface",
+]
+features = []
+default_enabled_features = []
+reasons = []
+
+[packages.evidence]
+digest = "49d50249c7a2601babe6d84644d6c289a6574b34b2162a702ef09281dc7915a9a1824d5bf8a0b6df7852e09eb6b40a21b2b41d95135747900f62fcb22c20e445"
+signature = "builtin:official"
+source_authority = "official"
+source_public_keys = []
+
+[[packages]]
+name = "agent-runtime"
+version = "current"
+runtime = "wasm"
+sha512 = "b900551b69bc562edcb80d285ec74884502b507c2786e5b1b38d995c6e96f98c93ad7ab65960056266240bd9237dcdc42b1b7895d9cdb618aeb1637bea4ac285"
+source = "packages/official/agent-core"
+trusted = true
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:OyxUemvOes6A1i/SpKI8e2R0iM6ZGFNoKtapjV7Se+YxGok+ST9xC+SwpVXoRI0iChXdNWpwtLxDVn35nc+wDg=="
+source_authority = "official"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+package_kind = "foundation"
+manifest_digest = "b900551b69bc562edcb80d285ec74884502b507c2786e5b1b38d995c6e96f98c93ad7ab65960056266240bd9237dcdc42b1b7895d9cdb618aeb1637bea4ac285"
+artifact_digest = "b900551b69bc562edcb80d285ec74884502b507c2786e5b1b38d995c6e96f98c93ad7ab65960056266240bd9237dcdc42b1b7895d9cdb618aeb1637bea4ac285"
+artifact_set_id = ""
+store_object_id = "sha512-b900551b69bc562edcb80d285ec74884502b507c2786e5b1b38d995c6e96f98c93ad7ab65960056266240bd9237dcdc42b1b7895d9cdb618aeb1637bea4ac285-agent-runtime-current"
+store_path = ""
+closure_id = ""
+entry_kind = "wasm"
+runtime_provider = "agent-core"
+provides = [
+    "agent.runtime",
+    "team.delegate",
+]
+requires = ["session.events"]
+roles = ["foundation"]
+capabilities = [
+    "agent.runtime",
+    "team.delegate",
+]
+features = []
+default_enabled_features = []
+reasons = []
+
+[packages.evidence]
+digest = "b900551b69bc562edcb80d285ec74884502b507c2786e5b1b38d995c6e96f98c93ad7ab65960056266240bd9237dcdc42b1b7895d9cdb618aeb1637bea4ac285"
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:OyxUemvOes6A1i/SpKI8e2R0iM6ZGFNoKtapjV7Se+YxGok+ST9xC+SwpVXoRI0iChXdNWpwtLxDVn35nc+wDg=="
+source_authority = "official"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+
+[[packages]]
+name = "prompt-system"
+version = "current"
+runtime = "wasm"
+sha512 = "61e0a1d60a30938351dba9673277439116c060cc610b69d3012854ea7c69bec1732ea37460a0aca2a6664eb2eccde0c20b14d2c4a0609d1263cf68214dde8308"
+source = "packages/official/prompt-system"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+source_public_keys = []
+package_kind = "foundation"
+manifest_digest = "61e0a1d60a30938351dba9673277439116c060cc610b69d3012854ea7c69bec1732ea37460a0aca2a6664eb2eccde0c20b14d2c4a0609d1263cf68214dde8308"
+artifact_digest = "61e0a1d60a30938351dba9673277439116c060cc610b69d3012854ea7c69bec1732ea37460a0aca2a6664eb2eccde0c20b14d2c4a0609d1263cf68214dde8308"
+artifact_set_id = ""
+store_object_id = "sha512-61e0a1d60a30938351dba9673277439116c060cc610b69d3012854ea7c69bec1732ea37460a0aca2a6664eb2eccde0c20b14d2c4a0609d1263cf68214dde8308-prompt-system-current"
+store_path = ""
+closure_id = ""
+entry_kind = "wasm"
+runtime_provider = "prompt-system"
+provides = ["prompt.system"]
+requires = []
+roles = ["foundation"]
+capabilities = ["prompt.system"]
+features = []
+default_enabled_features = []
+reasons = []
+
+[packages.evidence]
+digest = "61e0a1d60a30938351dba9673277439116c060cc610b69d3012854ea7c69bec1732ea37460a0aca2a6664eb2eccde0c20b14d2c4a0609d1263cf68214dde8308"
+signature = "builtin:official"
+source_authority = "official"
+source_public_keys = []
+
+[[packages]]
+name = "memory-store"
+version = "current"
+runtime = "service"
+sha512 = "6ef56e3c4fe8f88e1db505e4c1080bffbf1212988de51cf5dc77ae5c4e5c1dd7f301d624e15851d6541be6db5175ca08915d9650646eb36dacd3298953c1d15e"
+source = "packages/official/memory"
+trusted = true
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:m/2Sa6/A7AqkFNO2/0amWAeW8fXCGWnOud+s/lWpEElWaCVFmGzLUubELAUyF96g4wzVJu+fINz7tfVp3kNODg=="
+source_authority = "official"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+package_kind = "provider"
+manifest_digest = "6ef56e3c4fe8f88e1db505e4c1080bffbf1212988de51cf5dc77ae5c4e5c1dd7f301d624e15851d6541be6db5175ca08915d9650646eb36dacd3298953c1d15e"
+artifact_digest = "6ef56e3c4fe8f88e1db505e4c1080bffbf1212988de51cf5dc77ae5c4e5c1dd7f301d624e15851d6541be6db5175ca08915d9650646eb36dacd3298953c1d15e"
+artifact_set_id = ""
+store_object_id = "sha512-6ef56e3c4fe8f88e1db505e4c1080bffbf1212988de51cf5dc77ae5c4e5c1dd7f301d624e15851d6541be6db5175ca08915d9650646eb36dacd3298953c1d15e-memory-store-current"
+store_path = ""
+closure_id = ""
+entry_kind = "service"
+runtime_provider = "memory"
+provides = ["memory.store"]
+requires = []
+roles = ["provider"]
+capabilities = ["memory.store"]
+features = []
+default_enabled_features = []
+reasons = []
+
+[packages.evidence]
+digest = "6ef56e3c4fe8f88e1db505e4c1080bffbf1212988de51cf5dc77ae5c4e5c1dd7f301d624e15851d6541be6db5175ca08915d9650646eb36dacd3298953c1d15e"
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:m/2Sa6/A7AqkFNO2/0amWAeW8fXCGWnOud+s/lWpEElWaCVFmGzLUubELAUyF96g4wzVJu+fINz7tfVp3kNODg=="
+source_authority = "official"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+
+[[packages]]
+name = "skills-runtime"
+version = "current"
+runtime = "wasm"
+sha512 = "d25ec6867eb7556520c26b14ba5a0d2a4bd9d432736f56b8c168b71b3319028fc066e3748e58732314888e373834f92c2c59c39e700f19f37af8433fde36f2f3"
+source = "packages/official/skills"
+trusted = true
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:GSkuuNiBfHNebs7BblKTHQdjW34KEoWadNoJWqEMV7zfgxkdIBYAPQQNfItTps/q9O/PKWejKXnix3Iwrm3ZCg=="
+source_authority = "official"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+package_kind = "provider"
+manifest_digest = "d25ec6867eb7556520c26b14ba5a0d2a4bd9d432736f56b8c168b71b3319028fc066e3748e58732314888e373834f92c2c59c39e700f19f37af8433fde36f2f3"
+artifact_digest = "d25ec6867eb7556520c26b14ba5a0d2a4bd9d432736f56b8c168b71b3319028fc066e3748e58732314888e373834f92c2c59c39e700f19f37af8433fde36f2f3"
+artifact_set_id = ""
+store_object_id = "sha512-d25ec6867eb7556520c26b14ba5a0d2a4bd9d432736f56b8c168b71b3319028fc066e3748e58732314888e373834f92c2c59c39e700f19f37af8433fde36f2f3-skills-runtime-current"
+store_path = ""
+closure_id = ""
+entry_kind = "wasm"
+runtime_provider = "skills"
+provides = [
+    "ext.skills",
+    "skills.evolution",
+    "skills.governance",
+    "skills.review",
+    "skills.maintenance",
+]
+requires = []
+roles = ["provider"]
+capabilities = [
+    "ext.skills",
+    "skills.evolution",
+    "skills.governance",
+    "skills.review",
+    "skills.maintenance",
+]
+features = []
+default_enabled_features = []
+reasons = []
+
+[packages.evidence]
+digest = "d25ec6867eb7556520c26b14ba5a0d2a4bd9d432736f56b8c168b71b3319028fc066e3748e58732314888e373834f92c2c59c39e700f19f37af8433fde36f2f3"
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:GSkuuNiBfHNebs7BblKTHQdjW34KEoWadNoJWqEMV7zfgxkdIBYAPQQNfItTps/q9O/PKWejKXnix3Iwrm3ZCg=="
+source_authority = "official"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+
+[[packages]]
+name = "mcp-client"
+version = "current"
+runtime = "wasm"
+sha512 = "428ae205d9558cff30579848caf6b4987bd310f8bb689275c405a4abb462fa442ae5efa05b030611ebd8b2495db1d49f9706eab7ba016be46fb4153a8eb87613"
+source = "packages/official/mcp-client"
+trusted = true
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:DKhxTDhblotNqhTW16/GC/UpRo+EBtOX0nygoSZaTXD6ED7WDuXlFt9mlcJzmhOP7coiv9wP5RV4Qb4e9cXqCA=="
+source_authority = "official"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+package_kind = "provider"
+manifest_digest = "428ae205d9558cff30579848caf6b4987bd310f8bb689275c405a4abb462fa442ae5efa05b030611ebd8b2495db1d49f9706eab7ba016be46fb4153a8eb87613"
+artifact_digest = "428ae205d9558cff30579848caf6b4987bd310f8bb689275c405a4abb462fa442ae5efa05b030611ebd8b2495db1d49f9706eab7ba016be46fb4153a8eb87613"
+artifact_set_id = ""
+store_object_id = "sha512-428ae205d9558cff30579848caf6b4987bd310f8bb689275c405a4abb462fa442ae5efa05b030611ebd8b2495db1d49f9706eab7ba016be46fb4153a8eb87613-mcp-client-current"
+store_path = ""
+closure_id = ""
+entry_kind = "wasm"
+runtime_provider = "mcp-client"
+provides = ["ext.mcp"]
+requires = []
+roles = ["provider"]
+capabilities = ["ext.mcp"]
+features = []
+default_enabled_features = []
+reasons = []
+
+[packages.evidence]
+digest = "428ae205d9558cff30579848caf6b4987bd310f8bb689275c405a4abb462fa442ae5efa05b030611ebd8b2495db1d49f9706eab7ba016be46fb4153a8eb87613"
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:DKhxTDhblotNqhTW16/GC/UpRo+EBtOX0nygoSZaTXD6ED7WDuXlFt9mlcJzmhOP7coiv9wP5RV4Qb4e9cXqCA=="
+source_authority = "official"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+
+[[packages]]
+name = "channel-core"
+version = "current"
+runtime = "wasm"
+sha512 = "8268f0f5c71dbc684a4e9b1f09d059fb5c8fcceb47f8ea2999d37726ea97ffd926f9619a065de5fff91bd81c263d672c177c994df8b56d2367efd0815dbad2e7"
+source = "packages/official/channels"
+trusted = true
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:J4xGI0OJk/fYgdzOrEJ1KkyiNI+ad2IrvBOR88AiNCYUA983tST04AVWArTiLjOHhzXdJQ6LgawNhccpX0WQAA=="
+source_authority = "official"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+package_kind = "foundation"
+manifest_digest = "8268f0f5c71dbc684a4e9b1f09d059fb5c8fcceb47f8ea2999d37726ea97ffd926f9619a065de5fff91bd81c263d672c177c994df8b56d2367efd0815dbad2e7"
+artifact_digest = "8268f0f5c71dbc684a4e9b1f09d059fb5c8fcceb47f8ea2999d37726ea97ffd926f9619a065de5fff91bd81c263d672c177c994df8b56d2367efd0815dbad2e7"
+artifact_set_id = ""
+store_object_id = "sha512-8268f0f5c71dbc684a4e9b1f09d059fb5c8fcceb47f8ea2999d37726ea97ffd926f9619a065de5fff91bd81c263d672c177c994df8b56d2367efd0815dbad2e7-channel-core-current"
+store_path = ""
+closure_id = ""
+entry_kind = "wasm"
+runtime_provider = "channels"
+provides = ["channel.bridge"]
+requires = []
+roles = ["foundation"]
+capabilities = ["channel.bridge"]
+features = []
+default_enabled_features = []
+reasons = []
+
+[packages.evidence]
+digest = "8268f0f5c71dbc684a4e9b1f09d059fb5c8fcceb47f8ea2999d37726ea97ffd926f9619a065de5fff91bd81c263d672c177c994df8b56d2367efd0815dbad2e7"
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:J4xGI0OJk/fYgdzOrEJ1KkyiNI+ad2IrvBOR88AiNCYUA983tST04AVWArTiLjOHhzXdJQ6LgawNhccpX0WQAA=="
+source_authority = "official"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+
+[[packages]]
+name = "team-runtime"
+version = "current"
+runtime = "wasm"
+sha512 = "bcde446e15caf6bed0d17bd9ded48d239d63039414b0028bad2634d9fc86a52b8f8fc697e4947bfccaa51b2925d67723d7e4dd4e1bcf4363a9c1ad0b6dea61e5"
+source = "packages/official/team-runtime"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+source_public_keys = []
+package_kind = "foundation"
+manifest_digest = "bcde446e15caf6bed0d17bd9ded48d239d63039414b0028bad2634d9fc86a52b8f8fc697e4947bfccaa51b2925d67723d7e4dd4e1bcf4363a9c1ad0b6dea61e5"
+artifact_digest = "bcde446e15caf6bed0d17bd9ded48d239d63039414b0028bad2634d9fc86a52b8f8fc697e4947bfccaa51b2925d67723d7e4dd4e1bcf4363a9c1ad0b6dea61e5"
+artifact_set_id = ""
+store_object_id = "sha512-bcde446e15caf6bed0d17bd9ded48d239d63039414b0028bad2634d9fc86a52b8f8fc697e4947bfccaa51b2925d67723d7e4dd4e1bcf4363a9c1ad0b6dea61e5-team-runtime-current"
+store_path = ""
+closure_id = ""
+entry_kind = "wasm"
+runtime_provider = "team-runtime"
+provides = [
+    "team.runtime",
+    "team.role.catalog",
+    "team.context.shared",
+]
+requires = []
+roles = ["foundation"]
+capabilities = [
+    "team.runtime",
+    "team.role.catalog",
+    "team.context.shared",
+]
+features = []
+default_enabled_features = []
+reasons = []
+
+[packages.evidence]
+digest = "bcde446e15caf6bed0d17bd9ded48d239d63039414b0028bad2634d9fc86a52b8f8fc697e4947bfccaa51b2925d67723d7e4dd4e1bcf4363a9c1ad0b6dea61e5"
+signature = "builtin:official"
+source_authority = "official"
+source_public_keys = []
+
+[[packages]]
+name = "team-task-board"
+version = "current"
+runtime = "wasm"
+sha512 = "c03c3c4acc014e86ff38f46bb97733649cfe936fb9430b7ff9c53331efc8e7dafe2c727c3d43400a8f7415667e6b6e20567d2a081e05f3e1e9cf4e163f2d8993"
+source = "packages/official/team-task-board"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+source_public_keys = []
+package_kind = "foundation"
+manifest_digest = "c03c3c4acc014e86ff38f46bb97733649cfe936fb9430b7ff9c53331efc8e7dafe2c727c3d43400a8f7415667e6b6e20567d2a081e05f3e1e9cf4e163f2d8993"
+artifact_digest = "c03c3c4acc014e86ff38f46bb97733649cfe936fb9430b7ff9c53331efc8e7dafe2c727c3d43400a8f7415667e6b6e20567d2a081e05f3e1e9cf4e163f2d8993"
+artifact_set_id = ""
+store_object_id = "sha512-c03c3c4acc014e86ff38f46bb97733649cfe936fb9430b7ff9c53331efc8e7dafe2c727c3d43400a8f7415667e6b6e20567d2a081e05f3e1e9cf4e163f2d8993-team-task-board-current"
+store_path = ""
+closure_id = ""
+entry_kind = "wasm"
+runtime_provider = "team-task-board"
+provides = [
+    "team.taskboard",
+    "team.handoff",
+]
+requires = []
+roles = ["foundation"]
+capabilities = [
+    "team.taskboard",
+    "team.handoff",
+]
+features = []
+default_enabled_features = []
+reasons = []
+
+[packages.evidence]
+digest = "c03c3c4acc014e86ff38f46bb97733649cfe936fb9430b7ff9c53331efc8e7dafe2c727c3d43400a8f7415667e6b6e20567d2a081e05f3e1e9cf4e163f2d8993"
+signature = "builtin:official"
+source_authority = "official"
+source_public_keys = []
+
+[[packages]]
+name = "workflow-template-devteam"
+version = "current"
+runtime = "wasm"
+sha512 = "fe110e8b3525bd56c9d2fef13b499b0fce171ee53bcb6a482c020a46797f205c5b080ceb6311f4e0b6342badf909be872d6feb05c29e53944d814a1c412fb171"
+source = "packages/official/workflow-template-devteam"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+source_public_keys = []
+package_kind = "provider"
+manifest_digest = "fe110e8b3525bd56c9d2fef13b499b0fce171ee53bcb6a482c020a46797f205c5b080ceb6311f4e0b6342badf909be872d6feb05c29e53944d814a1c412fb171"
+artifact_digest = "fe110e8b3525bd56c9d2fef13b499b0fce171ee53bcb6a482c020a46797f205c5b080ceb6311f4e0b6342badf909be872d6feb05c29e53944d814a1c412fb171"
+artifact_set_id = ""
+store_object_id = "sha512-fe110e8b3525bd56c9d2fef13b499b0fce171ee53bcb6a482c020a46797f205c5b080ceb6311f4e0b6342badf909be872d6feb05c29e53944d814a1c412fb171-workflow-template-devteam-current"
+store_path = ""
+closure_id = ""
+entry_kind = "wasm"
+runtime_provider = "workflow-template-devteam"
+provides = ["workflow.template.devteam"]
+requires = []
+roles = ["provider"]
+capabilities = ["workflow.template.devteam"]
+features = []
+default_enabled_features = []
+reasons = []
+
+[packages.evidence]
+digest = "fe110e8b3525bd56c9d2fef13b499b0fce171ee53bcb6a482c020a46797f205c5b080ceb6311f4e0b6342badf909be872d6feb05c29e53944d814a1c412fb171"
+signature = "builtin:official"
+source_authority = "official"
+source_public_keys = []
+
+[[packages]]
+name = "session-events"
+version = "current"
+runtime = "wasm"
+sha512 = "ca8e95ae7b344eabb2746b113b61736ba15f330ba13f2db84c9b6d40a7dee2dbf51bc48a5ebfa4610ff552af0717e842c3a92e386c21d2a0f299e0f437ec312a"
+source = "packages/official/session-events"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+source_public_keys = []
+package_kind = "foundation"
+manifest_digest = "ca8e95ae7b344eabb2746b113b61736ba15f330ba13f2db84c9b6d40a7dee2dbf51bc48a5ebfa4610ff552af0717e842c3a92e386c21d2a0f299e0f437ec312a"
+artifact_digest = "ca8e95ae7b344eabb2746b113b61736ba15f330ba13f2db84c9b6d40a7dee2dbf51bc48a5ebfa4610ff552af0717e842c3a92e386c21d2a0f299e0f437ec312a"
+artifact_set_id = ""
+store_object_id = "sha512-ca8e95ae7b344eabb2746b113b61736ba15f330ba13f2db84c9b6d40a7dee2dbf51bc48a5ebfa4610ff552af0717e842c3a92e386c21d2a0f299e0f437ec312a-session-events-current"
+store_path = ""
+closure_id = ""
+entry_kind = "wasm"
+runtime_provider = "session-events"
+provides = ["session.events"]
+requires = []
+roles = ["foundation"]
+capabilities = ["session.events"]
+features = []
+default_enabled_features = []
+reasons = []
+
+[packages.evidence]
+digest = "ca8e95ae7b344eabb2746b113b61736ba15f330ba13f2db84c9b6d40a7dee2dbf51bc48a5ebfa4610ff552af0717e842c3a92e386c21d2a0f299e0f437ec312a"
+signature = "builtin:official"
+source_authority = "official"
+source_public_keys = []
+
+[[packages]]
+name = "workflow-orchestrator"
+version = "current"
+runtime = "wasm"
+sha512 = "406a0b56cda7593f88e1b62570b5d36ef3122b049840dd06eecf2d81c5c3ed3e680da69291c95aa7f5a42672322b67f3c730f0ef6e79af16f4bae73e4a07f3b1"
+source = "packages/official/workflow-orchestrator"
+trusted = true
+signature = "builtin:official"
+source_authority = "official"
+source_public_keys = []
+package_kind = "foundation"
+manifest_digest = "406a0b56cda7593f88e1b62570b5d36ef3122b049840dd06eecf2d81c5c3ed3e680da69291c95aa7f5a42672322b67f3c730f0ef6e79af16f4bae73e4a07f3b1"
+artifact_digest = "406a0b56cda7593f88e1b62570b5d36ef3122b049840dd06eecf2d81c5c3ed3e680da69291c95aa7f5a42672322b67f3c730f0ef6e79af16f4bae73e4a07f3b1"
+artifact_set_id = ""
+store_object_id = "sha512-406a0b56cda7593f88e1b62570b5d36ef3122b049840dd06eecf2d81c5c3ed3e680da69291c95aa7f5a42672322b67f3c730f0ef6e79af16f4bae73e4a07f3b1-workflow-orchestrator-current"
+store_path = ""
+closure_id = ""
+entry_kind = "wasm"
+runtime_provider = "workflow-orchestrator"
+provides = ["workflow.orchestration"]
+requires = []
+roles = ["foundation"]
+capabilities = ["workflow.orchestration"]
+features = []
+default_enabled_features = []
+reasons = []
+
+[packages.evidence]
+digest = "406a0b56cda7593f88e1b62570b5d36ef3122b049840dd06eecf2d81c5c3ed3e680da69291c95aa7f5a42672322b67f3c730f0ef6e79af16f4bae73e4a07f3b1"
+signature = "builtin:official"
+source_authority = "official"
+source_public_keys = []
+
+[[packages]]
+name = "weft-claw-ui"
+version = "current"
+runtime = "embedded"
+sha512 = "586890be55f9a4ad392b548e35a41b63e8bf71cf77d87f6d57b79a1fdbfdf3d65051bba04bfc7307d18038d29a73138e061de5b9e86d33b890a384408e52a637"
+source = "packages/installed/weft-claw"
+trusted = true
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:fNbqFkzkQYglDlwC2vPq3ibZRtMhVyBbEouDI2w9/ZuwU1yp1UYE66tlJMIQdKIBzCid5k0jNrNcBkNrXMPxCQ=="
+source_authority = "local-installed"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+package_kind = "provider"
+manifest_digest = "586890be55f9a4ad392b548e35a41b63e8bf71cf77d87f6d57b79a1fdbfdf3d65051bba04bfc7307d18038d29a73138e061de5b9e86d33b890a384408e52a637"
+artifact_digest = "586890be55f9a4ad392b548e35a41b63e8bf71cf77d87f6d57b79a1fdbfdf3d65051bba04bfc7307d18038d29a73138e061de5b9e86d33b890a384408e52a637"
+artifact_set_id = ""
+store_object_id = "sha512-586890be55f9a4ad392b548e35a41b63e8bf71cf77d87f6d57b79a1fdbfdf3d65051bba04bfc7307d18038d29a73138e061de5b9e86d33b890a384408e52a637-weft-claw-ui-current"
+store_path = ""
+closure_id = ""
+entry_kind = "embedded"
+runtime_provider = "weft-claw-ui"
+provides = ["ui.surface"]
+requires = []
+roles = ["provider"]
+capabilities = ["ui.surface"]
+features = []
+default_enabled_features = []
+reasons = []
+
+[packages.evidence]
+digest = "586890be55f9a4ad392b548e35a41b63e8bf71cf77d87f6d57b79a1fdbfdf3d65051bba04bfc7307d18038d29a73138e061de5b9e86d33b890a384408e52a637"
+signature = "ed25519:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=:fNbqFkzkQYglDlwC2vPq3ibZRtMhVyBbEouDI2w9/ZuwU1yp1UYE66tlJMIQdKIBzCid5k0jNrNcBkNrXMPxCQ=="
+source_authority = "local-installed"
+source_public_keys = ["A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="]
+
+[[bindings]]
+capability = "weft_claw.turn"
+provider = "weft-claw"
+package = "weft-claw"
+mutable = false
+package_version = "current"
+package_sha512 = "49d50249c7a2601babe6d84644d6c289a6574b34b2162a702ef09281dc7915a9a1824d5bf8a0b6df7852e09eb6b40a21b2b41d95135747900f62fcb22c20e445"
+binding_source = "declaration-default"
+
+[[bindings]]
+capability = "agent.runtime"
+provider = "agent-runtime"
+package = "agent-runtime"
+mutable = false
+package_version = "current"
+package_sha512 = "b900551b69bc562edcb80d285ec74884502b507c2786e5b1b38d995c6e96f98c93ad7ab65960056266240bd9237dcdc42b1b7895d9cdb618aeb1637bea4ac285"
+binding_source = "declaration-default"
+
+[[bindings]]
+capability = "core.execution"
+provider = "core"
+package = "core"
+mutable = false
+package_version = ""
+package_sha512 = ""
+binding_source = "declaration-default"
+
+[[bindings]]
+capability = "prompt.system"
+provider = "prompt-system"
+package = "prompt-system"
+mutable = false
+package_version = "current"
+package_sha512 = "61e0a1d60a30938351dba9673277439116c060cc610b69d3012854ea7c69bec1732ea37460a0aca2a6664eb2eccde0c20b14d2c4a0609d1263cf68214dde8308"
+binding_source = "declaration-default"
+
+[[bindings]]
+capability = "memory.store"
+provider = "memory-store"
+package = "memory-store"
+mutable = true
+package_version = "current"
+package_sha512 = "6ef56e3c4fe8f88e1db505e4c1080bffbf1212988de51cf5dc77ae5c4e5c1dd7f301d624e15851d6541be6db5175ca08915d9650646eb36dacd3298953c1d15e"
+binding_source = "declaration-default"
+
+[[bindings]]
+capability = "ext.skills"
+provider = "skills-runtime"
+package = "skills-runtime"
+mutable = true
+package_version = "current"
+package_sha512 = "d25ec6867eb7556520c26b14ba5a0d2a4bd9d432736f56b8c168b71b3319028fc066e3748e58732314888e373834f92c2c59c39e700f19f37af8433fde36f2f3"
+binding_source = "config-override"
+
+[[bindings]]
+capability = "ext.mcp"
+provider = "mcp-client"
+package = "mcp-client"
+mutable = true
+package_version = "current"
+package_sha512 = "428ae205d9558cff30579848caf6b4987bd310f8bb689275c405a4abb462fa442ae5efa05b030611ebd8b2495db1d49f9706eab7ba016be46fb4153a8eb87613"
+binding_source = "config-override"
+
+[[bindings]]
+capability = "channel.bridge"
+provider = "channel-core"
+package = "channel-core"
+mutable = true
+package_version = "current"
+package_sha512 = "8268f0f5c71dbc684a4e9b1f09d059fb5c8fcceb47f8ea2999d37726ea97ffd926f9619a065de5fff91bd81c263d672c177c994df8b56d2367efd0815dbad2e7"
+binding_source = "config-override"
+
+[[bindings]]
+capability = "team.runtime"
+provider = "team-runtime"
+package = "team-runtime"
+mutable = false
+package_version = "current"
+package_sha512 = "bcde446e15caf6bed0d17bd9ded48d239d63039414b0028bad2634d9fc86a52b8f8fc697e4947bfccaa51b2925d67723d7e4dd4e1bcf4363a9c1ad0b6dea61e5"
+binding_source = "config-override"
+
+[[bindings]]
+capability = "team.taskboard"
+provider = "team-task-board"
+package = "team-task-board"
+mutable = true
+package_version = "current"
+package_sha512 = "c03c3c4acc014e86ff38f46bb97733649cfe936fb9430b7ff9c53331efc8e7dafe2c727c3d43400a8f7415667e6b6e20567d2a081e05f3e1e9cf4e163f2d8993"
+binding_source = "config-override"
+
+[[bindings]]
+capability = "team.handoff"
+provider = "team-task-board"
+package = "team-task-board"
+mutable = true
+package_version = "current"
+package_sha512 = "c03c3c4acc014e86ff38f46bb97733649cfe936fb9430b7ff9c53331efc8e7dafe2c727c3d43400a8f7415667e6b6e20567d2a081e05f3e1e9cf4e163f2d8993"
+binding_source = "config-override"
+
+[[bindings]]
+capability = "team.role.catalog"
+provider = "team-runtime"
+package = "team-runtime"
+mutable = false
+package_version = "current"
+package_sha512 = "bcde446e15caf6bed0d17bd9ded48d239d63039414b0028bad2634d9fc86a52b8f8fc697e4947bfccaa51b2925d67723d7e4dd4e1bcf4363a9c1ad0b6dea61e5"
+binding_source = "config-override"
+
+[[bindings]]
+capability = "team.delegate"
+provider = "agent-runtime"
+package = "agent-runtime"
+mutable = true
+package_version = "current"
+package_sha512 = "b900551b69bc562edcb80d285ec74884502b507c2786e5b1b38d995c6e96f98c93ad7ab65960056266240bd9237dcdc42b1b7895d9cdb618aeb1637bea4ac285"
+binding_source = "config-override"
+
+[[bindings]]
+capability = "team.context.shared"
+provider = "team-runtime"
+package = "team-runtime"
+mutable = true
+package_version = "current"
+package_sha512 = "bcde446e15caf6bed0d17bd9ded48d239d63039414b0028bad2634d9fc86a52b8f8fc697e4947bfccaa51b2925d67723d7e4dd4e1bcf4363a9c1ad0b6dea61e5"
+binding_source = "config-override"
+
+[[bindings]]
+capability = "workflow.template.devteam"
+provider = "workflow-template-devteam"
+package = "workflow-template-devteam"
+mutable = false
+package_version = "current"
+package_sha512 = "fe110e8b3525bd56c9d2fef13b499b0fce171ee53bcb6a482c020a46797f205c5b080ceb6311f4e0b6342badf909be872d6feb05c29e53944d814a1c412fb171"
+binding_source = "config-override"
+
+[[bindings]]
+capability = "ui.surface"
+provider = "weft-claw"
+package = "weft-claw"
+mutable = false
+package_version = "current"
+package_sha512 = "49d50249c7a2601babe6d84644d6c289a6574b34b2162a702ef09281dc7915a9a1824d5bf8a0b6df7852e09eb6b40a21b2b41d95135747900f62fcb22c20e445"
+binding_source = "declaration-default"
+
+[[bindings]]
+capability = "session.events"
+provider = "session-events"
+package = "session-events"
+mutable = true
+package_version = "current"
+package_sha512 = "ca8e95ae7b344eabb2746b113b61736ba15f330ba13f2db84c9b6d40a7dee2dbf51bc48a5ebfa4610ff552af0717e842c3a92e386c21d2a0f299e0f437ec312a"
+binding_source = "config-override"
+
+[[binding_sources]]
+capability = "weft_claw.turn"
+source = "declaration-default"
+package = "weft-claw"
+
+[[binding_sources]]
+capability = "agent.runtime"
+source = "declaration-default"
+package = "agent-runtime"
+
+[[binding_sources]]
+capability = "core.execution"
+source = "declaration-default"
+package = "core"
+
+[[binding_sources]]
+capability = "prompt.system"
+source = "declaration-default"
+package = "prompt-system"
+
+[[binding_sources]]
+capability = "memory.store"
+source = "declaration-default"
+package = "memory-store"
+
+[[binding_sources]]
+capability = "ext.skills"
+source = "config-override"
+package = "skills-runtime"
+
+[[binding_sources]]
+capability = "ext.mcp"
+source = "config-override"
+package = "mcp-client"
+
+[[binding_sources]]
+capability = "channel.bridge"
+source = "config-override"
+package = "channel-core"
+
+[[binding_sources]]
+capability = "team.runtime"
+source = "config-override"
+package = "team-runtime"
+
+[[binding_sources]]
+capability = "team.taskboard"
+source = "config-override"
+package = "team-task-board"
+
+[[binding_sources]]
+capability = "team.handoff"
+source = "config-override"
+package = "team-task-board"
+
+[[binding_sources]]
+capability = "team.role.catalog"
+source = "config-override"
+package = "team-runtime"
+
+[[binding_sources]]
+capability = "team.delegate"
+source = "config-override"
+package = "agent-runtime"
+
+[[binding_sources]]
+capability = "team.context.shared"
+source = "config-override"
+package = "team-runtime"
+
+[[binding_sources]]
+capability = "workflow.template.devteam"
+source = "config-override"
+package = "workflow-template-devteam"
+
+[[binding_sources]]
+capability = "ui.surface"
+source = "declaration-default"
+package = "weft-claw"
+
+[[binding_sources]]
+capability = "session.events"
+source = "config-override"
+package = "session-events"
+
+[notes]
+message = "Activated generation 4 via API"
