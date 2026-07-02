@@ -1780,29 +1780,18 @@ fn do_web_search(args: &serde_json::Value) -> PackageResult {
         "https://cn.bing.com/search?q={}",
         urlencoding::encode(&query),
     );
-    let exec = match exec_command("curl.exe", &["-L", "-sS", "--max-time", "8", "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)", &url]) {
-        Ok(result) => result,
+    let response_text = match http_request(
+        "GET",
+        &url,
+        &[("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")],
+        "",
+    ) {
+        Ok(body) => body,
         Err(error) => return PackageResult::err(format!("web search request failed: {}", error)),
     };
 
-    let stdout_text = exec.stdout.trim();
-    let stderr_text = exec.stderr.trim();
-    let response_text = if stdout_text.is_empty() {
-        stderr_text
-    } else {
-        stdout_text
-    };
-    if exec.status != 0 && response_text.is_empty() {
-        let message = if exec.stderr.trim().is_empty() {
-            exec.stdout.trim().to_string()
-        } else {
-            exec.stderr.trim().to_string()
-        };
-        return PackageResult::err(format!("web search request failed: {}", message));
-    }
-
-    let definition = parse_brave_definition(response_text);
-    let related = parse_brave_results(response_text, limit);
+    let definition = parse_brave_definition(&response_text);
+    let related = parse_brave_results(&response_text, limit);
 
     let mut summary_parts = Vec::new();
     if let Some(definition) = definition.as_ref() {
@@ -1869,84 +1858,6 @@ fn do_web_search(args: &serde_json::Value) -> PackageResult {
         "summary": summary,
         "source": "Brave Search HTML",
     }))
-}
-
-fn build_web_fetch_curl_args(method: &str, url: &str, body: Option<&str>) -> Vec<String> {
-    let mut args = vec![
-        "-L".to_string(),
-        "-sS".to_string(),
-        "-X".to_string(),
-        method.to_string(),
-        url.to_string(),
-        "-w".to_string(),
-        "\n__WEFT_STATUS__:%{http_code}".to_string(),
-    ];
-
-    if let Some(body) = body {
-        args.push("--data".to_string());
-        args.push(body.to_string());
-    }
-
-    args
-}
-
-fn parse_web_fetch_curl_output(stdout: &str) -> Option<(u16, String)> {
-    let marker = "\n__WEFT_STATUS__:";
-    let index = stdout.rfind(marker)?;
-    let body = stdout[..index].to_string();
-    let status_text = stdout[index + marker.len()..].trim();
-    let status = status_text.parse::<u16>().ok()?;
-    Some((status, body))
-}
-
-fn do_web_fetch(args: &serde_json::Value) -> PackageResult {
-    let url = args["url"].as_str().unwrap_or("").trim();
-    if url.is_empty() {
-        return PackageResult::err("missing url");
-    }
-
-    let method = args["method"].as_str().unwrap_or("GET").trim();
-    let method = if method.is_empty() { "GET" } else { method };
-    let body = args["body"].as_str();
-
-    let curl_args = build_web_fetch_curl_args(method, url, body);
-    let curl_arg_refs = curl_args
-        .iter()
-        .map(|value| value.as_str())
-        .collect::<Vec<_>>();
-    let exec = match exec_command("curl.exe", &curl_arg_refs) {
-        Ok(result) => result,
-        Err(error) => {
-            return PackageResult::err(format!("web fetch transport failed: {}", error.trim()))
-        }
-    };
-
-    if let Some((status, response_body)) = parse_web_fetch_curl_output(&exec.stdout) {
-        if exec.status == 0 {
-            return PackageResult::ok(serde_json::json!({
-                "status": status,
-                "body": response_body,
-            }));
-        }
-
-        let stderr_text = exec.stderr.trim();
-        let detail = if stderr_text.is_empty() {
-            format!("curl exited with status {}", exec.status)
-        } else {
-            stderr_text.to_string()
-        };
-        return PackageResult::err(format!(
-            "web fetch request failed with status {}: {}",
-            status, detail
-        ));
-    }
-
-    let stderr_text = exec.stderr.trim();
-    if !stderr_text.is_empty() {
-        return PackageResult::err(format!("web fetch transport failed: {}", stderr_text));
-    }
-
-    PackageResult::err("web fetch transport failed: missing HTTP status marker in curl output")
 }
 
 fn capability_result(raw: String) -> PackageResult {
@@ -2356,58 +2267,6 @@ fn do_execute_tool(agent: &str, tool: &str, args: &serde_json::Value) -> Package
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn build_web_fetch_curl_args_includes_method_url_and_status_marker() {
-        let args = build_web_fetch_curl_args("GET", "https://example.com", None);
-
-        assert_eq!(
-            args,
-            vec![
-                "-L",
-                "-sS",
-                "-X",
-                "GET",
-                "https://example.com",
-                "-w",
-                "\n__WEFT_STATUS__:%{http_code}",
-            ]
-        );
-    }
-
-    #[test]
-    fn build_web_fetch_curl_args_appends_body_when_present() {
-        let args = build_web_fetch_curl_args("POST", "https://example.com", Some("hello=1"));
-
-        assert_eq!(
-            args,
-            vec![
-                "-L",
-                "-sS",
-                "-X",
-                "POST",
-                "https://example.com",
-                "-w",
-                "\n__WEFT_STATUS__:%{http_code}",
-                "--data",
-                "hello=1",
-            ]
-        );
-    }
-
-    #[test]
-    fn parse_web_fetch_curl_output_extracts_status_and_body() {
-        let parsed = parse_web_fetch_curl_output("Example Domain\n__WEFT_STATUS__:200")
-            .expect("expected parsed curl output");
-
-        assert_eq!(parsed.0, 200);
-        assert_eq!(parsed.1, "Example Domain");
-    }
-
-    #[test]
-    fn parse_web_fetch_curl_output_requires_marker() {
-        assert!(parse_web_fetch_curl_output("Example Domain").is_none());
-    }
 
     #[test]
     fn parse_external_tool_name_reads_mcp_namespace() {

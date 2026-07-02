@@ -420,6 +420,7 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/api/providers/{name}", delete(providers::delete_provider))
         .route("/api/providers/{name}/upstream-models", get(providers::list_upstream_models))
+        .route("/api/routing", axum::routing::put(providers::update_routing))
         .route("/api/services", get(services::list_services))
         .route("/api/services/{name}/start", post(services::start_service))
         .route("/api/services/{name}/stop", post(services::stop_service))

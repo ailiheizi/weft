@@ -105,6 +105,7 @@ class ProvidersScreen extends ConsumerWidget {
   }
 }
 
+
 class _ProviderCard extends StatelessWidget {
   const _ProviderCard({
     required this.provider,

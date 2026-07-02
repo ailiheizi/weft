@@ -376,6 +376,55 @@ pub async fn delete_provider(
     (StatusCode::OK, Json(response)).into_response()
 }
 
+/// PUT /api/routing — 更新路由配置(default_provider / default_model / image_provider)。
+#[derive(Debug, Deserialize)]
+pub struct UpdateRoutingRequest {
+    #[serde(default)]
+    pub default_provider: Option<String>,
+    #[serde(default)]
+    pub default_model: Option<String>,
+    #[serde(default)]
+    pub image_provider: Option<String>,
+}
+
+pub async fn update_routing(
+    State(state): State<AppState>,
+    Json(req): Json<UpdateRoutingRequest>,
+) -> impl IntoResponse {
+    let mut config = state.config.write().await;
+
+    if let Some(dp) = req.default_provider {
+        config.routing.default_provider = if dp.is_empty() { None } else { Some(dp) };
+    }
+    if let Some(dm) = req.default_model {
+        config.routing.default_model = if dm.is_empty() { None } else { Some(dm) };
+    }
+    if let Some(ip) = req.image_provider {
+        config.routing.image_provider = if ip.is_empty() { None } else { Some(ip) };
+    }
+
+    // Persist to disk
+    if let Err(e) = save_config(&state.config_path, &config) {
+        tracing::error!("Failed to save config: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": "Failed to persist configuration"
+            })),
+        )
+            .into_response();
+    }
+
+    Json(serde_json::json!({
+        "routing": {
+            "default_provider": config.routing.default_provider,
+            "default_model": config.routing.default_model,
+            "image_provider": config.routing.image_provider,
+        }
+    }))
+    .into_response()
+}
+
 /// 从上游 provider 的 /v1/models 端点拉取实际可用模型列表。
 /// 让 web 前端能展示上游中转站的全部模型，而不只是 config 手写的几个。
 pub async fn list_upstream_models(

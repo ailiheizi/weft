@@ -87,7 +87,12 @@ fn generate(data: &serde_json::Value) -> PackageResult {
     })
     .to_string();
 
-    let url = format!("{base_url}/v1/images/generations");
+    // base_url 可能已含 /v1(如 apiyi 的 https://api.apiyi.com/v1),避免 /v1/v1。
+    let url = if base_url.ends_with("/v1") {
+        format!("{base_url}/images/generations")
+    } else {
+        format!("{base_url}/v1/images/generations")
+    };
     let auth = format!("Bearer {api_key}");
     let resp = match http_request(
         "POST",

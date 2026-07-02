@@ -373,40 +373,7 @@ fn normalize_web_search_query(query: &str) -> String {
     collapse_whitespace(&trim_query_punctuation(&value))
 }
 
-// ─── curl-based web fetch ──────────────────────────────────────────────────────
-
-fn build_curl_fetch_args(method: &str, url: &str, body: Option<&str>) -> Vec<String> {
-    let mut args = vec![
-        "-L".to_string(),
-        "-sS".to_string(),
-        "--max-time".to_string(),
-        "15".to_string(),
-        "-w".to_string(),
-        "\n__TOOLWEB_STATUS__:%{http_code}".to_string(),
-    ];
-
-    if method != "GET" {
-        args.push("-X".to_string());
-        args.push(method.to_string());
-    }
-
-    if let Some(b) = body {
-        args.push("-d".to_string());
-        args.push(b.to_string());
-    }
-
-    args.push(url.to_string());
-    args
-}
-
-fn parse_curl_output(stdout: &str) -> Option<(u16, String)> {
-    let marker = "\n__TOOLWEB_STATUS__:";
-    let index = stdout.rfind(marker)?;
-    let body = stdout[..index].to_string();
-    let status_text = stdout[index + marker.len()..].trim();
-    let status = status_text.parse::<u16>().ok()?;
-    Some((status, body))
-}
+// ─── host-based web fetch ─────────────────────────────────────────────────────
 
 fn do_web_fetch(data: &Value) -> PackageResult {
     let url = data.get("url").and_then(Value::as_str).unwrap_or("").trim();
@@ -419,47 +386,52 @@ fn do_web_fetch(data: &Value) -> PackageResult {
         .unwrap_or("GET")
         .trim()
         .to_uppercase();
-    let body = data.get("body").and_then(Value::as_str);
+    let body = data.get("body").and_then(Value::as_str).unwrap_or("");
 
-    let curl_args = build_curl_fetch_args(&method, url, body);
-    let curl_arg_refs: Vec<&str> = curl_args.iter().map(|s| s.as_str()).collect();
-    let exec = match exec_command("curl.exe", &curl_arg_refs) {
-        Ok(result) => result,
-        Err(error) => {
-            return PackageResult::err(format!("web_fetch transport failed: {}", error.trim()))
+    let headers: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+    let input = serde_json::json!({
+        "method": method,
+        "url": url,
+        "headers": headers,
+        "body": body,
+    })
+    .to_string();
+
+    let raw = match unsafe { host_http_request(input) } {
+        Ok(v) => v,
+        Err(e) => {
+            return PackageResult::err(format!("web_fetch transport failed: {}", e));
         }
     };
 
-    if let Some((status, response_body)) = parse_curl_output(&exec.stdout) {
-        if exec.status == 0 {
-            return PackageResult::ok(serde_json::json!({
-                "url": url,
-                "status": status,
-                "body": response_body,
-            }));
+    let parsed: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(v) => v,
+        Err(e) => {
+            return PackageResult::err(format!("web_fetch: invalid response json: {}", e));
         }
+    };
 
-        let stderr_text = exec.stderr.trim();
-        let detail = if stderr_text.is_empty() {
-            format!("curl exited with status {}", exec.status)
-        } else {
-            stderr_text.to_string()
-        };
-        return PackageResult::err(format!(
-            "web_fetch failed with HTTP {}: {}",
-            status, detail
-        ));
+    if let Some(err) = parsed.get("error").and_then(|v| v.as_str()) {
+        if !err.trim().is_empty() {
+            return PackageResult::err(format!("web_fetch transport failed: {}", err));
+        }
     }
 
-    let stderr_text = exec.stderr.trim();
-    if !stderr_text.is_empty() {
-        return PackageResult::err(format!("web_fetch transport failed: {}", stderr_text));
-    }
+    let status = parsed.get("status").and_then(|v| v.as_u64()).unwrap_or(0) as u16;
+    let response_body = parsed
+        .get("body")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
 
-    PackageResult::err("web_fetch transport failed: missing HTTP status marker in curl output")
+    PackageResult::ok(serde_json::json!({
+        "url": url,
+        "status": status,
+        "body": response_body,
+    }))
 }
 
-// ─── curl-based web search (Bing) ─────────────────────────────────────────────
+// ─── host-based web search (Bing) ─────────────────────────────────────────────
 
 fn do_web_search(data: &Value) -> PackageResult {
     let query = data
@@ -490,40 +462,18 @@ fn do_web_search(data: &Value) -> PackageResult {
         urlencoding::encode(&search_query),
     );
 
-    let exec = match exec_command(
-        "curl.exe",
-        &[
-            "-L",
-            "-sS",
-            "--max-time",
-            "8",
-            "-H",
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            &url,
-        ],
+    let response_text = match http_request(
+        "GET",
+        &url,
+        &[("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")],
+        "",
     ) {
-        Ok(result) => result,
+        Ok(body) => body,
         Err(error) => return PackageResult::err(format!("web_search request failed: {}", error)),
     };
 
-    let stdout_text = exec.stdout.trim();
-    let stderr_text = exec.stderr.trim();
-    let response_text = if stdout_text.is_empty() {
-        stderr_text
-    } else {
-        stdout_text
-    };
-    if exec.status != 0 && response_text.is_empty() {
-        let message = if exec.stderr.trim().is_empty() {
-            exec.stdout.trim().to_string()
-        } else {
-            exec.stderr.trim().to_string()
-        };
-        return PackageResult::err(format!("web_search request failed: {}", message));
-    }
-
-    let definition = parse_bing_definition(response_text);
-    let results = parse_bing_results(response_text, limit);
+    let definition = parse_bing_definition(&response_text);
+    let results = parse_bing_results(&response_text, limit);
 
     // Build summary text
     let mut summary_parts = Vec::new();

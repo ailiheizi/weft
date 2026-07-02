@@ -14,4 +14,3 @@ provides = ["tool.web"]
 
 [permissions]
 network = true
-process = true

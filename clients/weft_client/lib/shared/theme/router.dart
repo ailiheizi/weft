@@ -7,10 +7,13 @@ import '../../features/apps/package_surface_screen.dart';
 import '../../features/chat/chat_screen.dart';
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/management/management_screens.dart';
+import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/orchestration/orchestration_screen.dart';
 import '../../features/packages/packages_screen.dart';
 import '../../features/providers_config/providers_screen.dart';
 import '../../features/settings/settings_screen.dart';
+import '../../core/providers/data_providers.dart';
+import '../../core/providers/preferences_provider.dart';
 import '../../main.dart' show navigatorKey;
 import '../widgets/app_shell.dart';
 
@@ -36,12 +39,51 @@ CustomTransitionPage<void> _fade(Widget child) {
   );
 }
 
+/// 桥接 Riverpod → GoRouter.refreshListenable:当 providers 列表或
+/// onboarding 完成状态变化时,通知 GoRouter 重新评估 redirect。
+/// 这样首启时 providers 异步加载完(为空)后能自动跳到 onboarding。
+class _RouterRefresh extends ChangeNotifier {
+  _RouterRefresh(Ref ref) {
+    ref.listen(providersProvider, (_, _) => notifyListeners());
+    ref.listen(preferencesProvider, (_, _) => notifyListeners());
+  }
+}
+
 @riverpod
 GoRouter router(Ref ref) {
+  final refresh = _RouterRefresh(ref);
+  ref.onDispose(refresh.dispose);
+
   return GoRouter(
     navigatorKey: navigatorKey,
     initialLocation: '/dashboard',
+    refreshListenable: refresh,
+    redirect: (context, state) {
+      final prefs = ref.read(preferencesProvider);
+      // 已完成/跳过引导:不再拦截。
+      if (prefs.onboardingCompleted) {
+        // 已完成后若仍停在 onboarding,送回 dashboard。
+        return state.matchedLocation == '/onboarding' ? '/dashboard' : null;
+      }
+
+      final providersAsync = ref.read(providersProvider);
+      // 加载中或出错时不重定向,避免闪烁(dashboard 自身会显示加载态)。
+      final isEmpty = providersAsync.maybeWhen(
+        data: (list) => list.isEmpty,
+        orElse: () => false,
+      );
+
+      final atOnboarding = state.matchedLocation == '/onboarding';
+      if (isEmpty && !atOnboarding) return '/onboarding';
+      // providers 非空但用户手动进了 onboarding:放行到 dashboard。
+      if (!isEmpty && atOnboarding) return '/dashboard';
+      return null;
+    },
     routes: [
+      GoRoute(
+        path: '/onboarding',
+        pageBuilder: (context, state) => _fade(const OnboardingScreen()),
+      ),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [

@@ -283,6 +283,14 @@ pub async fn execute_capability_call(
                             .providers
                             .iter()
                             .find(|p| p.name.to_lowercase().contains("image"))
+                    })
+                    // 最终回退:用第一个有可用 key 的 provider(不限制必须是"图像"provider,
+                    // 让画布生成不依赖 routing.image_provider 配置)。
+                    .or_else(|| {
+                        config
+                            .providers
+                            .iter()
+                            .find(|p| p.keys.iter().any(|k| k.enabled && !k.value.trim().is_empty()))
                     });
                 if let Some(p) = img_provider {
                     if let Some(k) = p.keys.iter().find(|k| k.enabled && !k.value.trim().is_empty()) {

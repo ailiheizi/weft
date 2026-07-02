@@ -1438,31 +1438,41 @@ fn execute_js_runtime_tool(agent_name: &str, tool_name: &str, args: &Value) -> O
             }
         }
     }
-    let payload = serde_json::json!({
-        "agent": agent_name,
-        "tool": normalized_tool,
-        "args": forwarded_args,
-        "query_b64": base64::engine::general_purpose::STANDARD.encode(query.as_bytes()),
-    });
     let action = if normalized_tool == "fetch_url" {
         "fetch_url"
     } else {
         "web_search"
     };
+    // tool-web (wasm, http_request-based) expects { action, data: { query/url } }.
+    // Extract the actual query/url from forwarded_args into the flat data shape.
+    let tool_web_data = if action == "fetch_url" {
+        serde_json::json!({
+            "url": forwarded_args.get("url").and_then(Value::as_str).unwrap_or(query),
+            "method": forwarded_args.get("method").and_then(Value::as_str).unwrap_or("GET"),
+            "body": forwarded_args.get("body").and_then(Value::as_str).unwrap_or(""),
+            "agent": agent_name,
+        })
+    } else {
+        serde_json::json!({
+            "query": forwarded_args.get("query").and_then(Value::as_str).unwrap_or(query),
+            "limit": forwarded_args.get("limit").and_then(Value::as_u64).unwrap_or(5),
+            "agent": agent_name,
+        })
+    };
     let service_payload = serde_json::json!({
         "action": action,
-        "data": payload,
+        "data": tool_web_data,
     })
     .to_string();
     let result = match call_package(
-        "js-extension-runtime",
+        "tool-web",
         "handle_ws_message",
         &service_payload,
     ) {
         Ok(result) => result,
         Err(error) => {
             log_warn(&format!(
-                "agent-core js-runtime tool dispatch failed tool={}: {}",
+                "agent-core tool-web dispatch failed tool={}: {}",
                 normalized_tool, error
             ));
             return Some(
@@ -4308,22 +4318,6 @@ fn virtual_capability_tools(config: &AgentConfig) -> Vec<VirtualCapabilityToolSp
     tools
         .into_iter()
         .filter(|t| !(is_delegate_subagent && t.name == "delegate_to_team"))
-        .collect()
-}
-
-fn virtual_capability_tool_specs(config: &AgentConfig) -> Vec<Value> {
-    virtual_capability_tools(config)
-        .into_iter()
-        .map(|tool| {
-            serde_json::json!({
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.parameters,
-                }
-            })
-        })
         .collect()
 }
 
