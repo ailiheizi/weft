@@ -1775,12 +1775,12 @@ fn do_web_search(args: &serde_json::Value) -> PackageResult {
         }
     }
 
-    // Fallback: Brave Search HTML scraping.
+    // Fallback: Bing Search HTML scraping (Brave is blocked in China).
     let url = format!(
-        "https://search.brave.com/search?q={}&source=web",
+        "https://cn.bing.com/search?q={}",
         urlencoding::encode(&query),
     );
-    let exec = match exec_command("curl.exe", &["-L", "-sS", "--max-time", "8", &url]) {
+    let exec = match exec_command("curl.exe", &["-L", "-sS", "--max-time", "8", "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)", &url]) {
         Ok(result) => result,
         Err(error) => return PackageResult::err(format!("web search request failed: {}", error)),
     };

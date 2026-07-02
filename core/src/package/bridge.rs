@@ -1121,11 +1121,6 @@ host_fn!(pub host_call_package(user_data: WasmHostState; input: String) -> Strin
             None => {
                 if func == "handle_ws_message" {
                     if let Ok(envelope) = serde_json::from_str::<serde_json::Value>(args) {
-                        if display_target == "js-extension-runtime" {
-                            let result = execute_js_extension_runtime_service(&envelope, &ud);
-                            *ud.call_depth.lock().unwrap() -= 1;
-                            return Ok(result.to_string());
-                        }
                         if envelope.get("action").and_then(|value| value.as_str()).is_some() {
                             if let Some(app_state) = ud.app_state.lock().ok().and_then(|state| state.clone()) {
                                 let package_name = display_target.to_string();

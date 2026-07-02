@@ -390,6 +390,24 @@ pub async fn run_server() -> anyhow::Result<()> {
         }
     }
 
+    // FFI 模式覆盖:当 core 作为 DLL 嵌入 Flutter 进程时,ffi.rs 的
+    // start_core_with_options 通过环境变量注入 data_dir / config_dir,
+    // 因为无法修改 std::env::args。这里在 CLI args 解析之后再做一轮覆盖。
+    if let Ok(ffi_config_dir) = std::env::var("WEFT_FFI_CONFIG_DIR") {
+        if !ffi_config_dir.is_empty() {
+            let override_path = PathBuf::from(&ffi_config_dir).join("config.toml");
+            if override_path.exists() {
+                config = load_config_or_default(&override_path);
+            }
+            config_path = override_path;
+        }
+    }
+    if let Ok(ffi_data_dir) = std::env::var("WEFT_FFI_DATA_DIR") {
+        if !ffi_data_dir.is_empty() {
+            config.core.data_dir = ffi_data_dir;
+        }
+    }
+
     // 把 [web_search] 配置的 API key 注入进程环境，供 js-extension-runtime
     // 等 service 子进程继承（它们读 process.env.EXA_API_KEY 等）。
     config.web_search.apply_to_env();
@@ -400,6 +418,26 @@ pub async fn run_server() -> anyhow::Result<()> {
         .clone()
         .unwrap_or_else(|| "openrouter".into());
     let data_dir = resolve_data_dir(&repo_root, &config.core.data_dir);
+
+    // Enable wasmtime compiled-module cache for faster WASM plugin reloads.
+    // Extism reads EXTISM_CACHE_CONFIG to locate a wasmtime cache config file.
+    if std::env::var("EXTISM_CACHE_CONFIG").is_err() {
+        let cache_dir = data_dir.join("wasm-cache");
+        let _ = std::fs::create_dir_all(&cache_dir);
+        let cache_config_path = data_dir.join("wasmtime-cache.toml");
+        let cache_config_content = format!(
+            "[cache]\nenabled = true\ndirectory = \"{}\"\n",
+            cache_dir.to_string_lossy().replace('\\', "\\\\")
+        );
+        if std::fs::write(&cache_config_path, &cache_config_content).is_ok() {
+            std::env::set_var("EXTISM_CACHE_CONFIG", &cache_config_path);
+            tracing::info!(
+                cache_config = %cache_config_path.display(),
+                "WASM module cache enabled"
+            );
+        }
+    }
+
     let (runtime_token, runtime_token_path) = ensure_runtime_token(&data_dir)?;
     tracing::info!(
         data_dir = %data_dir.display(),
@@ -1090,12 +1128,22 @@ pub async fn run_server() -> anyhow::Result<()> {
     // 注册全局 router 供 /rpc 内部 dispatch 和 FFI rpc_call 直接调用(不走网络)。
     // 注意:这一步完成后 FFI dispatch 即可用,与 HTTP listener 是否成功无关。
     crate::api::rpc::set_global_router(app.clone());
+
+    // FFI debug: write HTTP bind status to ffi-debug.log (append).
+    let ffi_log_path = std::env::var("WEFT_FFI_DATA_DIR").ok().map(|d| std::path::PathBuf::from(d).join("ffi-debug.log"));
+
     // HTTP listener 绑定失败设为非致命:FFI 模式(客户端进程内嵌)下所有请求走
     // 进程内 dispatch,不依赖 HTTP。端口被残留进程占用时(os error 10048)只告警,
     // 让 core 继续以纯 FFI 模式运行,而不是整个 run_server 失败退出。
     match tokio::net::TcpListener::bind(&addr).await {
         Ok(listener) => {
             tracing::info!("weft-core listening on {}", addr);
+            if let Some(ref log_path) = ffi_log_path {
+                use std::io::Write;
+                if let Ok(mut f) = std::fs::OpenOptions::new().append(true).open(log_path) {
+                    let _ = writeln!(f, "[ffi] HTTP bind OK on {}", addr);
+                }
+            }
             axum::serve(listener, app)
                 .with_graceful_shutdown(graceful_shutdown)
                 .await?;
@@ -1106,6 +1154,12 @@ pub async fn run_server() -> anyhow::Result<()> {
                 addr,
                 e
             );
+            if let Some(ref log_path) = ffi_log_path {
+                use std::io::Write;
+                if let Ok(mut f) = std::fs::OpenOptions::new().append(true).open(log_path) {
+                    let _ = writeln!(f, "[ffi] HTTP bind FAILED on {}: {}", addr, e);
+                }
+            }
             // 不起 HTTP,但仍等待 shutdown 信号以便优雅退出(保存 KV、停服务)。
             graceful_shutdown.await;
         }

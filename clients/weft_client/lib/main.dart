@@ -2,16 +2,19 @@ import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:go_router/go_router.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 import 'core/api/client.dart' show runtimeTokenPathOverride;
+import 'core/api/ffi_dio_adapter.dart';
 import 'core/providers/chat_provider.dart';
-import 'core/providers/data_providers.dart' show providersProvider;
+import 'core/runtime/core_process_manager.dart';
 import 'core/providers/preferences_provider.dart';
 import 'core/providers/sessions_provider.dart';
-import 'core/runtime/core_process_manager.dart';
-import 'features/onboarding/onboarding_view.dart';
+import 'core/transport/frb_generated/ffi.dart' as frb;
+import 'core/transport/frb_generated/frb_generated.dart';
 import 'shared/theme/app_theme.dart';
 import 'shared/theme/router.dart';
 import 'shared/widgets/glass_backdrop.dart';
@@ -20,25 +23,11 @@ import 'shared/widgets/glass_backdrop.dart';
 final navigatorKey = GlobalKey<NavigatorState>();
 
 // Bundled weft-core sidecar; started before the UI, stopped on exit.
+// Only used if FFI mode fails.
 final coreManager = CoreProcessManager();
 
-/// Stops the bundled core when the window is closed, then lets the app exit.
-class _CoreShutdownListener extends WindowListener {
-  bool _closing = false;
-
-  @override
-  void onWindowClose() async {
-    if (_closing) return;
-    _closing = true;
-    try {
-      await coreManager.dispose();
-    } finally {
-      await windowManager.setPreventClose(false);
-      await windowManager.destroy();
-    }
-    exit(0);
-  }
-}
+// Whether core is running in FFI mode (DLL in-process) vs sidecar mode.
+bool _ffiMode = false;
 
 // Global ProviderContainer reference for VM extensions
 ProviderContainer? _container;
@@ -60,18 +49,18 @@ void _registerVmExtensions() {
   developer.registerExtension('ext.weft.currentRoute', (method, params) async {
     final ctx = navigatorKey.currentContext;
     if (ctx != null) {
-      final location = GoRouterState.of(ctx).uri.toString();
-      return developer.ServiceExtensionResponse.result('{"route": "$location"}');
+      return developer.ServiceExtensionResponse.result('{"route": "${GoRouterState.of(ctx).uri}"}');
     }
-    return developer.ServiceExtensionResponse.result('{"route": "unknown"}');
+    return developer.ServiceExtensionResponse.error(
+        developer.ServiceExtensionResponse.extensionError, 'No context');
   });
 
-  // ext.weft.sendMessage — send a chat message in the active session
+  // ext.weft.sendMessage — send a chat message
   developer.registerExtension('ext.weft.sendMessage', (method, params) async {
-    final content = params['content'] ?? '';
-    if (content.isEmpty) {
+    final content = params['content'];
+    if (content == null || content.isEmpty) {
       return developer.ServiceExtensionResponse.error(
-          developer.ServiceExtensionResponse.extensionError, 'content is required');
+          developer.ServiceExtensionResponse.extensionError, 'content required');
     }
     final container = _container;
     if (container == null) {
@@ -80,7 +69,6 @@ void _registerVmExtensions() {
     }
     final sessionId = container.read(activeSessionIdProvider);
     if (sessionId == null) {
-      // Create a new session first
       final meta = await container.read(sessionsProvider.notifier).createSession();
       final newId = meta.id;
       container.read(activeSessionIdProvider.notifier).state = newId;
@@ -92,13 +80,126 @@ void _registerVmExtensions() {
   });
 }
 
-void main() async {
+/// Stops the core when the window is closed, then lets the app exit.
+class _CoreShutdownListener extends WindowListener {
+  bool _closing = false;
+
+  @override
+  void onWindowClose() async {
+    if (_closing) return;
+    _closing = true;
+    try {
+      if (_ffiMode) {
+        // FFI mode: stop core via in-process dispatch.
+        await frb.stopCore();
+      } else {
+        // Sidecar mode: shut down the process.
+        await coreManager.dispose();
+      }
+    } finally {
+      await windowManager.setPreventClose(false);
+      await windowManager.destroy();
+    }
+    exit(0);
+  }
+}
+
+/// Join path segments with the platform separator.
+String _joinPath(List<String> parts) {
+  return parts.join(Platform.pathSeparator);
+}
+
+/// Attempt to start core via FFI (DLL in-process).
+/// Returns true if successful, false if we should fall back to sidecar.
+Future<bool> _tryStartCoreFfi() async {
+  try {
+    // Locate weft_core DLL next to the app executable.
+    final appDir = File(Platform.resolvedExecutable).parent.path;
+    final dllName = Platform.isWindows ? 'weft_core.dll' : 'libweft_core.so';
+
+    // Search order for the DLL:
+    final candidates = [
+      _joinPath([appDir, dllName]),
+      _joinPath([appDir, 'weft-core', dllName]),
+      // Dev mode: relative to repo
+      _joinPath([appDir, '..', '..', 'core', 'target', 'release', dllName]),
+    ];
+
+    String? dllPath;
+    for (final path in candidates) {
+      if (File(path).existsSync()) {
+        dllPath = path;
+        break;
+      }
+    }
+
+    if (dllPath == null) {
+      debugPrint('[weft-ffi] DLL not found, falling back to sidecar');
+      return false;
+    }
+
+    // Initialize flutter_rust_bridge with the located DLL.
+    await RustLib.init(
+      externalLibrary: ExternalLibrary.open(dllPath),
+    );
+
+    // Resolve paths:
+    // - projectRoot = exe directory (where packages/ lives in bundled app)
+    // - dataDir = OS app-support directory for persistent data
+    // - configDir = same as dataDir (writable location for config)
+    final support = await getApplicationSupportDirectory();
+    final dataDir = _joinPath([support.path, 'weft-core-data']);
+    await Directory(dataDir).create(recursive: true);
+    final configDir = dataDir;
+
+    // Use appDir as project root (bundled packages/ lives there).
+    final projectRoot = appDir;
+
+    debugPrint('[weft-ffi] starting core: root=$projectRoot, data=$dataDir');
+
+    final error = await frb.startCoreWithOptions(
+      projectRoot: projectRoot,
+      dataDir: dataDir,
+      configDir: configDir,
+    );
+
+    if (error.isNotEmpty) {
+      debugPrint('[weft-ffi] start_core_with_options failed: $error');
+      return false;
+    }
+
+    // FFI mode active: set up the adapter and token path.
+    FfiDioAdapter.enabled = true;
+    runtimeTokenPathOverride = _joinPath([dataDir, 'runtime-token']);
+    debugPrint('[weft-ffi] core started successfully in FFI mode');
+    return true;
+  } catch (e, stack) {
+    debugPrint('[weft-ffi] FFI init failed: $e\n$stack');
+    return false;
+  }
+}
+
+void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+
+  // Try FFI mode first (DLL in-process, no sidecar).
+  _ffiMode = await _tryStartCoreFfi();
+
+  if (!_ffiMode) {
+    // Fallback: start sidecar core process.
+    try {
+      await coreManager.ensureRunning();
+      runtimeTokenPathOverride = coreManager.tokenFilePath;
+    } catch (e) {
+      debugPrint('[weft] Core start failed: $e');
+    }
+  }
+
   _registerVmExtensions();
   await windowManager.ensureInitialized();
 
-  // Intercept window close so we can stop the sidecar core before exiting.
+  // Intercept window close so we can stop the core before exiting.
   await windowManager.setPreventClose(true);
   windowManager.addListener(_CoreShutdownListener());
 
@@ -116,155 +217,7 @@ void main() async {
 
   final container = ProviderContainer();
   _container = container;
-  runApp(UncontrolledProviderScope(
-    container: container,
-    child: const CoreStartupGate(child: WeftApp()),
-  ));
-}
-
-/// Starts the bundled weft-core before showing the app. While the core is
-/// coming up a splash is shown; if it fails to start, an error with a retry
-/// button is shown instead. A core already running externally is reused.
-class CoreStartupGate extends StatefulWidget {
-  const CoreStartupGate({super.key, required this.child});
-
-  final Widget child;
-
-  @override
-  State<CoreStartupGate> createState() => _CoreStartupGateState();
-}
-
-class _CoreStartupGateState extends State<CoreStartupGate> {
-  late Future<void> _startup;
-
-  @override
-  void initState() {
-    super.initState();
-    _startup = _startCore();
-  }
-
-  Future<void> _startCore() async {
-    await coreManager.ensureRunning();
-    // Point the API client at the exact runtime-token the core just wrote,
-    // so authenticated requests don't 401 due to a path mismatch.
-    runtimeTokenPathOverride = coreManager.tokenFilePath;
-  }
-
-  void _retry() {
-    setState(() => _startup = _startCore());
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<void>(
-      future: _startup,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.done) {
-          if (snapshot.hasError) {
-            return _StartupScaffold(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.error_outline, size: 48),
-                  const SizedBox(height: 16),
-                  const Text('Failed to start weft-core'),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Text(
-                      '${snapshot.error}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton(onPressed: _retry, child: const Text('Retry')),
-                ],
-              ),
-            );
-          }
-          return _OnboardingGate(child: widget.child);
-        }
-        return const _StartupScaffold(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: 36,
-                height: 36,
-                child: CircularProgressIndicator(strokeWidth: 3),
-              ),
-              SizedBox(height: 20),
-              Text('Starting weft-core…'),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _StartupScaffold extends StatelessWidget {
-  const _StartupScaffold({required this.child});
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(body: Center(child: child)),
-    );
-  }
-}
-
-/// Shows the first-run onboarding (OOBE) before the main app when the user has
-/// not completed it AND has no providers configured. Once done (or skipped),
-/// the main app is shown for the rest of the session.
-class _OnboardingGate extends ConsumerStatefulWidget {
-  const _OnboardingGate({required this.child});
-  final Widget child;
-
-  @override
-  ConsumerState<_OnboardingGate> createState() => _OnboardingGateState();
-}
-
-class _OnboardingGateState extends ConsumerState<_OnboardingGate> {
-  bool _dismissed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    if (_dismissed) return widget.child;
-
-    final completed =
-        ref.watch(preferencesProvider.select((p) => p.onboardingCompleted));
-    if (completed) return widget.child;
-
-    // Wait for the provider list so we don't flash onboarding for users who
-    // already have providers (e.g. a returning user on a fresh prefs store).
-    final providers = ref.watch(providersProvider);
-    return providers.when(
-      loading: () => const _StartupScaffold(
-        child: SizedBox(
-          width: 36,
-          height: 36,
-          child: CircularProgressIndicator(strokeWidth: 3),
-        ),
-      ),
-      // If we can't reach the provider list, fall through to the app rather
-      // than trapping the user in onboarding.
-      error: (_, _) => widget.child,
-      data: (list) {
-        if (list.isNotEmpty) return widget.child;
-        return MaterialApp(
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.dark,
-          home: OnboardingView(
-            onComplete: () => setState(() => _dismissed = true),
-          ),
-        );
-      },
-    );
-  }
+  runApp(UncontrolledProviderScope(container: container, child: const WeftApp()));
 }
 
 class WeftApp extends ConsumerWidget {
@@ -273,13 +226,17 @@ class WeftApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    final prefs = ref.watch(preferencesProvider);
+    final themeMode = prefs.themeMode;
+
     return MaterialApp.router(
       title: 'WEFT',
-      theme: AppTheme.dark,
-      routerConfig: router,
       debugShowCheckedModeBanner: false,
-      builder: (context, child) =>
-          GlassBackdrop(child: child ?? const SizedBox.shrink()),
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: themeMode,
+      routerConfig: router,
+      builder: (context, child) => GlassBackdrop(child: child ?? const SizedBox()),
     );
   }
 }

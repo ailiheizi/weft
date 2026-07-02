@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,7 +15,7 @@ import 'app_detail_screen.dart';
 ///
 /// 动态判断 package 是否有 web UI(通过探测多个候选地址)。
 /// 有 → 嵌 webview 加载;没有 → fallback 到诊断页(AppDetailScreen)。
-/// 探测顺序：core 托管路径 → 本地 dev server → fallback。
+/// 探测顺序：本地 file:// → core 托管路径 → 本地 dev server → fallback。
 class PackageSurfaceScreen extends ConsumerStatefulWidget {
   const PackageSurfaceScreen({super.key, required this.appName});
 
@@ -41,7 +43,6 @@ class _PackageSurfaceScreenState extends ConsumerState<PackageSurfaceScreen> {
     final coreBase = 'http://127.0.0.1:17830';
 
     // 读 loopback token（webview 内 JS 调 API 需要它）
-    // 复用 Dio interceptor 的完整候选路径搜索逻辑。
     final token = await readLoopbackToken();
 
     String buildUrl(String base) {
@@ -50,25 +51,33 @@ class _PackageSurfaceScreenState extends ConsumerState<PackageSurfaceScreen> {
       return '$base${base.contains('?') ? '&' : '?'}${params.join('&')}';
     }
 
-    // 探测 package 自带 web UI:/packages/{name}/ui/index.html
-    // 有 → webview;没有 → 诊断页。不写死任何列表,由 core 动态 serve 决定。
-    try {
-      final resp = await dio.get<void>(
-        '/packages/${widget.appName}/ui/index.html',
-        options: Options(receiveTimeout: const Duration(seconds: 3)),
-      );
-      if (resp.statusCode == 200) {
-        _webUiUrl = buildUrl(
-            '$coreBase/packages/${Uri.encodeComponent(widget.appName)}/ui/index.html');
-        if (mounted) setState(() => _hasWebUi = true);
-        return;
-      }
-    } catch (_) {}
+    // 候选1 跳过: file:// 在 WebView2 下有 CORS/JS 限制,改用 DLL 内 HTTP serve。
+    // final localUiPath = await _findLocalUiPath();
+    // if (localUiPath != null) {
+    //   _webUiUrl = buildUrl(Uri.file(localUiPath).toString());
+    //   if (mounted) setState(() => _hasWebUi = true);
+    //   return;
+    // }
 
-    if (mounted) setState(() => _hasWebUi = false);
+    // 候选2：core HTTP 托管路径 /packages/{name}/ui/index.html
+    // FFI 模式下 HTTP listener 在后台启动,可能有延迟,重试几次。
+    for (var attempt = 0; attempt < 5; attempt++) {
+      try {
+        final resp = await dio.get<void>(
+          '/packages/${widget.appName}/ui/index.html',
+          options: Options(receiveTimeout: const Duration(seconds: 3)),
+        );
+        if (resp.statusCode == 200) {
+          _webUiUrl = buildUrl(
+              '$coreBase/packages/${Uri.encodeComponent(widget.appName)}/ui/index.html');
+          if (mounted) setState(() => _hasWebUi = true);
+          return;
+        }
+      } catch (_) {}
+      if (attempt < 4) await Future.delayed(const Duration(seconds: 2));
+    }
 
     // 候选3：包的本地 Vite dev server（开发模式）
-    // rss-reader 在 5173，其他包可按约定映射端口
     final devPorts = <String, int>{
       'rss-reader': 5173,
     };
@@ -89,6 +98,38 @@ class _PackageSurfaceScreenState extends ConsumerState<PackageSurfaceScreen> {
     }
 
     if (mounted) setState(() => _hasWebUi = false);
+  }
+
+  /// 搜索本地打包的 UI 文件。
+  /// 按优先级检查：
+  /// 1. exe 同级 bundle/packages/official/{name}/ui/dist/index.html
+  /// 2. 项目仓库 packages/official/{name}/ui/dist/index.html
+  Future<String?> _findLocalUiPath() async {
+    final name = widget.appName;
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+
+    final candidates = [
+      // Release 打包路径（exe 同级 packages 目录）
+      '$exeDir/packages/official/$name/ui/dist/index.html',
+      '$exeDir/packages/official/$name/ui/index.html',
+      // 旧路径兼容（bundle 子目录）
+      '$exeDir/bundle/packages/official/$name/ui/dist/index.html',
+      // 开发模式（项目根）
+      'packages/official/$name/ui/dist/index.html',
+      '../packages/official/$name/ui/dist/index.html',
+      '../../packages/official/$name/ui/dist/index.html',
+    ];
+
+    for (final path in candidates) {
+      try {
+        final file = File(path);
+        if (await file.exists()) {
+          // 返回绝对路径
+          return file.absolute.path;
+        }
+      } catch (_) {}
+    }
+    return null;
   }
 
   @override

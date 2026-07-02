@@ -3,66 +3,409 @@ use serde_json::Value;
 
 const PACKAGE_NAME: &str = "tool-web";
 const CAPABILITY_NAME: &str = "tool.web";
-const JS_RUNTIME_PACKAGE: &str = "js-extension-runtime";
 
-/// Unwrap the js-extension-runtime response envelope, mirroring agent-core logic.
-fn unwrap_js_response(raw: &str) -> Result<Value, String> {
-    let payload: Value =
-        serde_json::from_str(raw).map_err(|e| format!("invalid json from js-runtime: {}", e))?;
+// ─── HTML parsing helpers (mirrored from skills package) ───────────────────────
 
-    // Direct ok
-    if payload.get("status").and_then(Value::as_str) == Some("ok") {
-        return Ok(payload.get("data").cloned().unwrap_or(payload));
-    }
-    // {ok: true, result: {status: "ok", ...}}
-    if payload.get("ok").and_then(Value::as_bool) == Some(true) {
-        if let Some(result) = payload.get("result") {
-            if result.get("status").and_then(Value::as_str) == Some("ok") {
-                return Ok(result.get("data").cloned().unwrap_or(result.clone()));
-            }
-        }
-    }
-    // {status: "executed", response: {status: "ok", ...}}
-    if payload.get("status").and_then(Value::as_str) == Some("executed") {
-        if let Some(response) = payload.get("response") {
-            if response.get("status").and_then(Value::as_str) == Some("ok") {
-                return Ok(response.get("data").cloned().unwrap_or(response.clone()));
-            }
-            if response.get("ok").and_then(Value::as_bool) == Some(true) {
-                if let Some(result) = response.get("result") {
-                    if result.get("status").and_then(Value::as_str) == Some("ok") {
-                        return Ok(result.get("data").cloned().unwrap_or(result.clone()));
-                    }
-                }
-            }
-        }
-    }
-
-    let err = payload
-        .get("error")
-        .and_then(Value::as_str)
-        .or_else(|| {
-            payload
-                .get("response")
-                .and_then(|r| r.get("error"))
-                .and_then(Value::as_str)
-        })
-        .unwrap_or("js-runtime returned non-ok response");
-    Err(err.to_string())
+fn decode_html_entities(value: &str) -> String {
+    value
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&#x27;", "'")
 }
 
-fn call_js_runtime(action: &str, payload: &Value) -> PackageResult {
-    match call_package(
-        JS_RUNTIME_PACKAGE,
-        "handle_ws_message",
-        &payload.to_string(),
-    ) {
-        Ok(raw) => match unwrap_js_response(&raw) {
-            Ok(data) => PackageResult::ok(data),
-            Err(e) => PackageResult::err(e),
-        },
-        Err(e) => PackageResult::err(format!("js-runtime unavailable ({}): {}", action, e)),
+fn strip_html_tags(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut in_tag = false;
+
+    for ch in value.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => output.push(ch),
+            _ => {}
+        }
     }
+
+    output
+}
+
+fn collapse_whitespace(value: &str) -> String {
+    value
+        .split_whitespace()
+        .collect::<Vec<&str>>()
+        .join(" ")
+        .trim()
+        .to_string()
+}
+
+fn extract_attr_value(block: &str, attr: &str) -> Option<String> {
+    let needle = format!("{}=\"", attr);
+    let start = block.find(&needle)? + needle.len();
+    let rest = &block[start..];
+    let end = rest.find('"')?;
+    Some(decode_html_entities(&rest[..end]))
+}
+
+// ─── Bing Search HTML parsers ──────────────────────────────────────────────────
+
+fn parse_bing_definition(html: &str) -> Option<String> {
+    // Bing knowledge panel is in class="b_ans"
+    let start = html.find("class=\"b_ans\"")?;
+    let block = &html[start..html.len().min(start + 12000)];
+
+    // Try to extract text from the answer block
+    // Look for a heading first
+    let heading = block.find("<h2").and_then(|idx| {
+        let section = &block[idx..];
+        let content_start = section.find('>')? + 1;
+        let content = &section[content_start..];
+        let content_end = content.find("</h2>")?;
+        let text = collapse_whitespace(&decode_html_entities(&strip_html_tags(
+            &content[..content_end],
+        )));
+        if text.is_empty() {
+            None
+        } else {
+            Some(text)
+        }
+    });
+
+    // Look for description text in a <p> tag
+    let description = block.find("<p").and_then(|idx| {
+        let section = &block[idx..];
+        let content_start = section.find('>')? + 1;
+        let content = &section[content_start..];
+        let content_end = content.find("</p>")?;
+        let text = collapse_whitespace(&decode_html_entities(&strip_html_tags(
+            &content[..content_end],
+        )));
+        if text.is_empty() {
+            None
+        } else {
+            Some(text)
+        }
+    })?;
+
+    Some(match heading {
+        Some(word) => format!("{}: {}", word, description),
+        None => description,
+    })
+}
+
+fn parse_bing_results(html: &str, limit: usize) -> Vec<Value> {
+    let mut results = Vec::new();
+
+    // Split by class="b_algo" markers (Bing result items have class="b_algo" possibly with other attrs)
+    let marker = "class=\"b_algo\"";
+    let mut cursor = html;
+
+    while results.len() < limit {
+        let Some(block_start) = cursor.find(marker) else {
+            break;
+        };
+        cursor = &cursor[block_start + marker.len()..];
+
+        // Determine the end of this result block (next b_algo or end of string)
+        let block_end = cursor.find(marker).unwrap_or(cursor.len());
+        let block = &cursor[..block_end];
+
+        // Extract URL and title from <h2><a href="...">TITLE</a></h2>
+        let url_and_title = (|| {
+            // In Bing, the main result link is inside <h2><a href="URL">title text</a></h2>
+            let h2_pos = block.find("<h2")?;
+            let h2_block = &block[h2_pos..];
+            let a_pos = h2_block.find("<a ")?;
+            let a_section = &h2_block[a_pos..];
+            let tag_end = a_section.find('>')?;
+            let tag = &a_section[..tag_end + 1];
+
+            let href = extract_attr_value(tag, "href")?;
+            if !href.starts_with("http") {
+                return None;
+            }
+
+            // Extract title: text between > and </a>
+            let after_tag = &a_section[tag_end + 1..];
+            let close_a = after_tag.find("</a>").unwrap_or(after_tag.len());
+            let title_text = collapse_whitespace(&decode_html_entities(
+                &strip_html_tags(&after_tag[..close_a]),
+            ));
+            Some((href, title_text))
+        })();
+
+        let Some((url, title)) = url_and_title else {
+            continue;
+        };
+
+        // Extract snippet from <p> or from a caption/description area
+        let snippet = block
+            .find("<p")
+            .and_then(|idx| {
+                let section = &block[idx..];
+                let content_start = section.find('>')? + 1;
+                let content = &section[content_start..];
+                // End at </p> or next tag boundary
+                let content_end = content.find("</p>").unwrap_or(content.len().min(500));
+                let text = collapse_whitespace(&decode_html_entities(&strip_html_tags(
+                    &content[..content_end],
+                )));
+                if text.is_empty() {
+                    None
+                } else {
+                    Some(text)
+                }
+            })
+            .unwrap_or_default();
+
+        if !url.is_empty() && (!title.is_empty() || !snippet.is_empty()) {
+            results.push(serde_json::json!({
+                "title": title,
+                "url": url,
+                "text": snippet,
+            }));
+        }
+    }
+
+    results
+}
+
+// ─── Query normalization ───────────────────────────────────────────────────────
+
+fn trim_query_punctuation(value: &str) -> String {
+    value
+        .trim()
+        .trim_matches(|ch: char| {
+            matches!(
+                ch,
+                '"' | '\''
+                    | '`'
+                    | ','
+                    | '.'
+                    | '!'
+                    | '?'
+                    | ':'
+                    | ';'
+                    | '('
+                    | ')'
+                    | '['
+                    | ']'
+                    | '{'
+                    | '}'
+                    | '\u{3002}'
+                    | '\u{FF01}'
+                    | '\u{FF1F}'
+                    | '\u{FF0C}'
+                    | '\u{FF1A}'
+                    | '\u{201C}'
+                    | '\u{201D}'
+                    | '\u{300C}'
+                    | '\u{300D}'
+                    | '\u{300E}'
+                    | '\u{300F}'
+            )
+        })
+        .trim()
+        .to_string()
+}
+
+fn strip_known_prefixes(mut value: String) -> String {
+    let ascii_prefixes = [
+        "please ",
+        "can you ",
+        "could you ",
+        "would you ",
+        "help me ",
+        "search online for ",
+        "search online ",
+        "search the web for ",
+        "search the web ",
+        "search for ",
+        "search up ",
+        "search ",
+        "look up ",
+        "research ",
+        "find information about ",
+        "find out about ",
+        "tell me about ",
+        "what is the meaning of ",
+        "meaning of ",
+    ];
+    let unicode_prefixes = [
+        "\u{4E0A}\u{7F51}\u{641C}\u{7D22}\u{4E00}\u{4E0B}",
+        "\u{4E0A}\u{7F51}\u{641C}\u{7D22}",
+        "\u{7F51}\u{4E0A}\u{641C}\u{7D22}\u{4E00}\u{4E0B}",
+        "\u{7F51}\u{4E0A}\u{641C}\u{7D22}",
+        "\u{5E2E}\u{6211}\u{641C}\u{7D22}\u{4E00}\u{4E0B}",
+        "\u{5E2E}\u{6211}\u{641C}\u{7D22}",
+        "\u{5E2E}\u{6211}\u{67E5}\u{4E00}\u{4E0B}",
+        "\u{5E2E}\u{6211}\u{7814}\u{7A76}\u{4E00}\u{4E0B}",
+        "\u{641C}\u{7D22}\u{4E00}\u{4E0B}",
+        "\u{641C}\u{7D22}",
+        "\u{67E5}\u{4E00}\u{4E0B}",
+        "\u{67E5}\u{67E5}",
+        "\u{7814}\u{7A76}\u{4E00}\u{4E0B}",
+        "\u{8C03}\u{7814}\u{4E00}\u{4E0B}",
+    ];
+
+    loop {
+        let lower = value.to_lowercase();
+        let mut changed = false;
+
+        for prefix in ascii_prefixes {
+            if lower.starts_with(prefix) {
+                value = value[prefix.len()..].trim_start().to_string();
+                changed = true;
+                break;
+            }
+        }
+        if changed {
+            continue;
+        }
+
+        for prefix in unicode_prefixes {
+            if value.starts_with(prefix) {
+                value = value[prefix.len()..].trim_start().to_string();
+                changed = true;
+                break;
+            }
+        }
+
+        if !changed {
+            break;
+        }
+    }
+
+    value
+}
+
+fn strip_known_suffixes(mut value: String) -> String {
+    let ascii_suffixes = [
+        " for me",
+        " please",
+        " thanks",
+        " thank you",
+        " and tell me",
+        " and explain it",
+    ];
+    let unicode_suffixes = [
+        "\u{5427}",
+        "\u{5440}",
+        "\u{8C22}\u{8C22}",
+        "\u{7136}\u{540E}\u{544A}\u{8BC9}\u{6211}",
+        "\u{518D}\u{544A}\u{8BC9}\u{6211}",
+        "\u{544A}\u{8BC9}\u{6211}",
+    ];
+
+    loop {
+        let lower = value.to_lowercase();
+        let mut changed = false;
+
+        for suffix in ascii_suffixes {
+            if lower.ends_with(suffix) {
+                let keep = value.len().saturating_sub(suffix.len());
+                value = value[..keep].trim_end().to_string();
+                changed = true;
+                break;
+            }
+        }
+        if changed {
+            continue;
+        }
+
+        for suffix in unicode_suffixes {
+            if value.ends_with(suffix) {
+                let keep = value.len().saturating_sub(suffix.len());
+                value = value[..keep].trim_end().to_string();
+                changed = true;
+                break;
+            }
+        }
+
+        if !changed {
+            break;
+        }
+    }
+
+    value
+}
+
+fn normalize_web_search_query(query: &str) -> String {
+    let mut value = trim_query_punctuation(query);
+    if value.is_empty() {
+        return value;
+    }
+
+    value = strip_known_prefixes(value);
+    value = strip_known_suffixes(value);
+
+    let lower = value.to_lowercase();
+    if let Some(rest) = lower.strip_prefix("the meaning of ") {
+        let offset = value.len() - rest.len();
+        value = format!("{} meaning", value[offset..].trim());
+    } else if let Some(rest) = lower.strip_prefix("meaning of ") {
+        let offset = value.len() - rest.len();
+        value = format!("{} meaning", value[offset..].trim());
+    } else if let Some(rest) = lower.strip_prefix("what does ") {
+        if let Some(end) = rest.find(" mean") {
+            let start = value.len() - rest.len();
+            value = format!("{} meaning", value[start..start + end].trim());
+        }
+    }
+
+    let chinese_meaning_suffix = "\u{7684}\u{542B}\u{4E49}";
+    let chinese_meaning_question = "\u{662F}\u{4EC0}\u{4E48}\u{610F}\u{601D}";
+    let chinese_meaning_alt = "\u{7684}\u{610F}\u{601D}";
+    if value.ends_with(chinese_meaning_suffix) {
+        let keep = value.len().saturating_sub(chinese_meaning_suffix.len());
+        value = format!("{} \u{542B}\u{4E49}", value[..keep].trim());
+    } else if value.ends_with(chinese_meaning_question) {
+        let keep = value.len().saturating_sub(chinese_meaning_question.len());
+        value = format!("{} \u{542B}\u{4E49}", value[..keep].trim());
+    } else if value.ends_with(chinese_meaning_alt) {
+        let keep = value.len().saturating_sub(chinese_meaning_alt.len());
+        value = format!("{} \u{542B}\u{4E49}", value[..keep].trim());
+    }
+
+    collapse_whitespace(&trim_query_punctuation(&value))
+}
+
+// ─── curl-based web fetch ──────────────────────────────────────────────────────
+
+fn build_curl_fetch_args(method: &str, url: &str, body: Option<&str>) -> Vec<String> {
+    let mut args = vec![
+        "-L".to_string(),
+        "-sS".to_string(),
+        "--max-time".to_string(),
+        "15".to_string(),
+        "-w".to_string(),
+        "\n__TOOLWEB_STATUS__:%{http_code}".to_string(),
+    ];
+
+    if method != "GET" {
+        args.push("-X".to_string());
+        args.push(method.to_string());
+    }
+
+    if let Some(b) = body {
+        args.push("-d".to_string());
+        args.push(b.to_string());
+    }
+
+    args.push(url.to_string());
+    args
+}
+
+fn parse_curl_output(stdout: &str) -> Option<(u16, String)> {
+    let marker = "\n__TOOLWEB_STATUS__:";
+    let index = stdout.rfind(marker)?;
+    let body = stdout[..index].to_string();
+    let status_text = stdout[index + marker.len()..].trim();
+    let status = status_text.parse::<u16>().ok()?;
+    Some((status, body))
 }
 
 fn do_web_fetch(data: &Value) -> PackageResult {
@@ -77,27 +420,46 @@ fn do_web_fetch(data: &Value) -> PackageResult {
         .trim()
         .to_uppercase();
     let body = data.get("body").and_then(Value::as_str);
-    let agent = data
-        .get("agent")
-        .and_then(Value::as_str)
-        .unwrap_or("tool-web");
 
-    let mut args = serde_json::json!({ "url": url, "method": method });
-    if let Some(body_str) = body {
-        args["body"] = Value::String(body_str.to_string());
+    let curl_args = build_curl_fetch_args(&method, url, body);
+    let curl_arg_refs: Vec<&str> = curl_args.iter().map(|s| s.as_str()).collect();
+    let exec = match exec_command("curl.exe", &curl_arg_refs) {
+        Ok(result) => result,
+        Err(error) => {
+            return PackageResult::err(format!("web_fetch transport failed: {}", error.trim()))
+        }
+    };
+
+    if let Some((status, response_body)) = parse_curl_output(&exec.stdout) {
+        if exec.status == 0 {
+            return PackageResult::ok(serde_json::json!({
+                "url": url,
+                "status": status,
+                "body": response_body,
+            }));
+        }
+
+        let stderr_text = exec.stderr.trim();
+        let detail = if stderr_text.is_empty() {
+            format!("curl exited with status {}", exec.status)
+        } else {
+            stderr_text.to_string()
+        };
+        return PackageResult::err(format!(
+            "web_fetch failed with HTTP {}: {}",
+            status, detail
+        ));
     }
 
-    let payload = serde_json::json!({
-        "action": "fetch_url",
-        "data": {
-            "agent": agent,
-            "tool": "fetch_url",
-            "args": args,
-            "query_b64": "",
-        }
-    });
-    call_js_runtime("fetch_url", &payload)
+    let stderr_text = exec.stderr.trim();
+    if !stderr_text.is_empty() {
+        return PackageResult::err(format!("web_fetch transport failed: {}", stderr_text));
+    }
+
+    PackageResult::err("web_fetch transport failed: missing HTTP status marker in curl output")
 }
+
+// ─── curl-based web search (Bing) ─────────────────────────────────────────────
 
 fn do_web_search(data: &Value) -> PackageResult {
     let query = data
@@ -109,28 +471,112 @@ fn do_web_search(data: &Value) -> PackageResult {
     if query.is_empty() {
         return PackageResult::err("web_search requires a query argument");
     }
-    let agent = data
-        .get("agent")
-        .and_then(Value::as_str)
-        .unwrap_or("tool-web");
 
-    let args = serde_json::json!({
-        "query": query,
-        "provider": "exa",
-        "use_exa": true,
-    });
+    let limit = data
+        .get("limit")
+        .and_then(Value::as_u64)
+        .unwrap_or(5)
+        .clamp(1, 8) as usize;
 
-    let payload = serde_json::json!({
-        "action": "web_search",
-        "data": {
-            "agent": agent,
-            "tool": "web_search",
-            "args": args,
-            "query_b64": "",
+    let normalized = normalize_web_search_query(query);
+    let search_query = if normalized.is_empty() {
+        query.to_string()
+    } else {
+        normalized
+    };
+
+    let url = format!(
+        "https://cn.bing.com/search?q={}",
+        urlencoding::encode(&search_query),
+    );
+
+    let exec = match exec_command(
+        "curl.exe",
+        &[
+            "-L",
+            "-sS",
+            "--max-time",
+            "8",
+            "-H",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            &url,
+        ],
+    ) {
+        Ok(result) => result,
+        Err(error) => return PackageResult::err(format!("web_search request failed: {}", error)),
+    };
+
+    let stdout_text = exec.stdout.trim();
+    let stderr_text = exec.stderr.trim();
+    let response_text = if stdout_text.is_empty() {
+        stderr_text
+    } else {
+        stdout_text
+    };
+    if exec.status != 0 && response_text.is_empty() {
+        let message = if exec.stderr.trim().is_empty() {
+            exec.stdout.trim().to_string()
+        } else {
+            exec.stderr.trim().to_string()
+        };
+        return PackageResult::err(format!("web_search request failed: {}", message));
+    }
+
+    let definition = parse_bing_definition(response_text);
+    let results = parse_bing_results(response_text, limit);
+
+    // Build summary text
+    let mut summary_parts = Vec::new();
+    if let Some(def) = definition.as_ref() {
+        summary_parts.push(format!("Definition: {}", def));
+    } else if let Some(first) = results.first() {
+        let title = first.get("title").and_then(Value::as_str).unwrap_or("").trim();
+        let text = first.get("text").and_then(Value::as_str).unwrap_or("").trim();
+        if !title.is_empty() && !text.is_empty() {
+            summary_parts.push(format!("Top result: {}. {}", title, text));
+        } else if !text.is_empty() {
+            summary_parts.push(format!("Top result: {}", text));
+        } else if !title.is_empty() {
+            summary_parts.push(format!("Top result: {}", title));
         }
-    });
-    call_js_runtime("web_search", &payload)
+    }
+    if !results.is_empty() {
+        let bullets = results
+            .iter()
+            .take(limit)
+            .map(|entry| {
+                let title = entry.get("title").and_then(Value::as_str).unwrap_or("").trim();
+                let text = entry.get("text").and_then(Value::as_str).unwrap_or("").trim();
+                if title.is_empty() {
+                    format!("- {}", text)
+                } else if text.is_empty() {
+                    format!("- {}", title)
+                } else {
+                    format!("- {}: {}", title, text)
+                }
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+        if !bullets.trim().is_empty() {
+            summary_parts.push(format!("Related results:\n{}", bullets));
+        }
+    }
+
+    let summary = if summary_parts.is_empty() {
+        format!("No concise web result found for '{}'.", search_query)
+    } else {
+        summary_parts.join("\n")
+    };
+
+    PackageResult::ok(serde_json::json!({
+        "query": search_query,
+        "results": results,
+        "summary": summary,
+        "source": "bing",
+    }))
 }
+
+// ─── Action dispatch ───────────────────────────────────────────────────────────
 
 fn dispatch(action: &str, data: Value) -> PackageResult {
     match action {
@@ -139,7 +585,6 @@ fn dispatch(action: &str, data: Value) -> PackageResult {
             "capability": CAPABILITY_NAME,
             "runtime": "wasm",
             "actions": ["describe", "health", "web_fetch", "web_search"],
-            "delegate": JS_RUNTIME_PACKAGE,
         })),
         "health" => PackageResult::ok(serde_json::json!({
             "healthy": true,

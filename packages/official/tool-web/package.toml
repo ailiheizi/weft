@@ -11,3 +11,7 @@ provides = ["tool.web"]
 
 [capability]
 provides = ["tool.web"]
+
+[permissions]
+network = true
+process = true
