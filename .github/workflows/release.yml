@@ -288,12 +288,27 @@ jobs:
           fi
           7z a "$full.zip" "./$full/*"
 
+      - name: Build installer
+        shell: bash
+        run: |
+          # Install Inno Setup silently
+          curl -fsSL -o is-setup.exe "https://files.jrsoftware.org/is/6/innosetup-6.4.3.exe"
+          ./is-setup.exe //VERYSILENT //SUPPRESSMSGBOXES //DIR="./innosetup"
+          version="${GITHUB_REF_NAME#v}"
+          # Build slim installer
+          ./innosetup/ISCC.exe //DAppVersion="$version" installer/weft.iss
+          # Build full installer (rewrite source and output name)
+          sed -i 's|weft-desktop-windows-x86_64|weft-desktop-windows-x86_64-full|g' installer/weft.iss
+          sed -i 's|weft-setup-|weft-setup-full-|g' installer/weft.iss
+          ./innosetup/ISCC.exe //DAppVersion="$version" installer/weft.iss
+
       - uses: actions/upload-artifact@v4
         with:
           name: weft-desktop-windows-x86_64
           path: |
             weft-desktop-windows-x86_64.zip
             weft-desktop-windows-x86_64-full.zip
+            installer-output/*.exe
 
   # ---- 3. Publish the GitHub Release with all artifacts ---------------------
   release:
