@@ -1,9 +1,26 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../transport/frb_generated/ffi.dart' as frb;
+
+/// 临时诊断:把 FFI adapter 的关键事件写到 data-dir/ffi-adapter.log。
+void _ffiLog(String msg) {
+  () async {
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final f = File('${dir.path}/weft-core-data/ffi-adapter.log');
+      await f.writeAsString(
+        '${DateTime.now().toIso8601String()} $msg\n',
+        mode: FileMode.append,
+        flush: true,
+      );
+    } catch (_) {}
+  }();
+}
 
 /// 自定义 Dio HttpClientAdapter:把所有 HTTP 请求透明转为 FFI rpcCall 调用。
 /// 上层 API client 零改动,Dio 请求不走网络,直接经 FRB → Rust router.oneshot。
@@ -17,9 +34,18 @@ class FfiDioAdapter implements HttpClientAdapter {
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
   ) async {
+    _ffiLog('fetch ${options.method} ${options.uri.path} enabled=$enabled');
     if (!enabled) {
-      // FFI 未就绪,走默认 HTTP adapter。
-      return HttpClientAdapter().fetch(options, requestStream, cancelFuture);
+      // FFI 未就绪,等一小段时间(core 可能正在启动),避免立即走 HTTP 失败。
+      for (var i = 0; i < 50 && !enabled; i++) {
+        await Future.delayed(const Duration(milliseconds: 200));
+      }
+      if (!enabled) {
+        // 超时仍未就绪,走默认 HTTP adapter(sidecar 模式)。
+        _ffiLog('fallback HTTP after wait: ${options.uri.path}');
+        return HttpClientAdapter().fetch(options, requestStream, cancelFuture);
+      }
+      _ffiLog('enabled after wait: ${options.uri.path}');
     }
 
     // 把 Dio 请求转为 RequestEnvelope JSON。

@@ -179,10 +179,10 @@ Dio apiClient(Ref ref) {
   dio.interceptors.add(_LoopbackAuthInterceptor());
   dio.interceptors.add(AppErrorInterceptor());
 
-  // FFI 就绪时:所有 Dio 请求透明走 FFI dispatch(不经网络),上层零改动。
-  if (FfiDioAdapter.enabled) {
-    dio.httpClientAdapter = FfiDioAdapter();
-  }
+  // 始终挂 FfiDioAdapter:它内部按 FfiDioAdapter.enabled 动态决定走 FFI
+  // dispatch 还是回退到默认 HTTP adapter。避免"创建 Dio 时 enabled 还是 false
+  // → 永远走 HTTP"的时序问题(provider 可能在 FFI 初始化前就被读取缓存)。
+  dio.httpClientAdapter = FfiDioAdapter();
 
   return dio;
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -15,6 +16,7 @@ import 'core/providers/preferences_provider.dart';
 import 'core/providers/sessions_provider.dart';
 import 'core/transport/frb_generated/ffi.dart' as frb;
 import 'core/transport/frb_generated/frb_generated.dart';
+import 'features/startup/core_startup_screen.dart';
 import 'shared/theme/app_theme.dart';
 import 'shared/theme/router.dart';
 import 'shared/widgets/glass_backdrop.dart';
@@ -157,6 +159,7 @@ Future<bool> _tryStartCoreFfi() async {
 
     debugPrint('[weft-ffi] starting core: root=$projectRoot, data=$dataDir');
 
+    StartupController.current?.setStatus('正在启动核心运行时…');
     final error = await frb.startCoreWithOptions(
       projectRoot: projectRoot,
       dataDir: dataDir,
@@ -170,7 +173,40 @@ Future<bool> _tryStartCoreFfi() async {
 
     // FFI mode active: set up the adapter and token path.
     FfiDioAdapter.enabled = true;
-    runtimeTokenPathOverride = _joinPath([dataDir, 'runtime-token']);
+    final tokenPath = _joinPath([dataDir, 'runtime-token']);
+    runtimeTokenPathOverride = tokenPath;
+
+    // core 在后台线程异步写 token 文件,router_ready 时它可能还没落盘。
+    // 等 token 文件真正存在(最多 10s)再返回,避免首个 API 请求 401。
+    StartupController.current?.setStatus('正在准备鉴权…');
+    final tokenFile = File(tokenPath);
+    for (var i = 0; i < 100; i++) {
+      if (await tokenFile.exists() && (await tokenFile.length()) > 0) break;
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
+    // 等 HTTP listener 真正可达(部分 UI/webview 走 HTTP,不走 FFI dispatch)。
+    // 探测 /api/health 直到成功(最多 15s),避免首个请求 connection refused。
+    StartupController.current?.setStatus('正在加载插件与服务…');
+    final token = (await tokenFile.readAsString()).trim();
+    final probe = HttpClient()..connectionTimeout = const Duration(seconds: 1);
+    for (var i = 0; i < 150; i++) {
+      try {
+        final req = await probe.getUrl(Uri.parse('http://127.0.0.1:17830/api/health'));
+        req.headers.set('Authorization', 'Bearer $token');
+        final resp = await req.close().timeout(const Duration(seconds: 1));
+        if (resp.statusCode == 200) {
+          await resp.drain();
+          break;
+        }
+        await resp.drain();
+      } catch (_) {
+        // 还没起来,继续等
+      }
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+    probe.close(force: true);
+
     debugPrint('[weft-ffi] core started successfully in FFI mode');
     return true;
   } catch (e, stack) {
@@ -179,22 +215,73 @@ Future<bool> _tryStartCoreFfi() async {
   }
 }
 
+/// Phases of the app-level startup gate. Drives [_StartupGate].
+enum StartupPhase { initializing, ready, failed }
+
+/// Holds the current startup phase + failure reason so the UI can render a
+/// loading screen while core spins up, instead of a frozen/blank window.
+///
+/// Core init (FFI DLL or sidecar) is intentionally kicked off *after* `runApp`
+/// so the first frame — the loading screen — paints immediately.
+class StartupController extends ChangeNotifier {
+  StartupPhase phase = StartupPhase.initializing;
+  String? errorMessage;
+
+  /// 当前启动阶段的中文文案,显示在 loading 屏上让用户知道进度。
+  String statusText = '正在初始化…';
+
+  /// 全局单例,供 _tryStartCoreFfi 等函数更新启动状态文案。
+  static StartupController? current;
+
+  void setStatus(String text) {
+    statusText = text;
+    notifyListeners();
+  }
+
+  /// Run (or re-run) core initialization. Safe to call again from a Retry.
+  Future<void> initCore() async {
+    current = this;
+    phase = StartupPhase.initializing;
+    errorMessage = null;
+    statusText = '正在启动核心…';
+    notifyListeners();
+
+    // Try FFI mode first (DLL in-process, no sidecar).
+    _ffiMode = await _tryStartCoreFfi();
+
+    if (!_ffiMode) {
+      // Fallback: start sidecar core process.
+      setStatus('正在启动核心进程(sidecar)…');
+      try {
+        await coreManager.ensureRunning();
+        runtimeTokenPathOverride = coreManager.tokenFilePath;
+      } catch (e) {
+        debugPrint('[weft] Core start failed: $e');
+        errorMessage = e is CoreLaunchException ? e.message : e.toString();
+        phase = StartupPhase.failed;
+        notifyListeners();
+        return;
+      }
+    }
+
+    statusText = '就绪';
+    phase = StartupPhase.ready;
+    notifyListeners();
+  }
+
+  /// Give up on the pre-flight gate and enter the app anyway. The in-app
+  /// connection poller keeps trying to reach core, so this is not a dead end.
+  void skip() {
+    phase = StartupPhase.ready;
+    notifyListeners();
+  }
+}
+
+final startupController = StartupController();
+
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
-
-  // Try FFI mode first (DLL in-process, no sidecar).
-  _ffiMode = await _tryStartCoreFfi();
-
-  if (!_ffiMode) {
-    // Fallback: start sidecar core process.
-    try {
-      await coreManager.ensureRunning();
-      runtimeTokenPathOverride = coreManager.tokenFilePath;
-    } catch (e) {
-      debugPrint('[weft] Core start failed: $e');
-    }
-  }
 
   _registerVmExtensions();
   await windowManager.ensureInitialized();
@@ -217,7 +304,10 @@ void main(List<String> args) async {
 
   final container = ProviderContainer();
   _container = container;
+  // Paint the loading screen first, then kick off the blocking core init so the
+  // window is never frozen/blank while FFI/sidecar spins up.
   runApp(UncontrolledProviderScope(container: container, child: const WeftApp()));
+  unawaited(startupController.initCore());
 }
 
 class WeftApp extends ConsumerWidget {
@@ -236,7 +326,53 @@ class WeftApp extends ConsumerWidget {
       darkTheme: AppTheme.dark,
       themeMode: themeMode,
       routerConfig: router,
-      builder: (context, child) => GlassBackdrop(child: child ?? const SizedBox()),
+      builder: (context, child) => GlassBackdrop(
+        child: _StartupGate(child: child ?? const SizedBox()),
+      ),
+    );
+  }
+}
+
+/// Overlays the [CoreStartupScreen] on top of the routed content until core
+/// initialization finishes (or the user chooses to skip). This keeps the router
+/// mounted underneath so navigation state is preserved, while the window shows a
+/// spinner instead of a blank/frozen frame during the blocking FFI/sidecar boot.
+class _StartupGate extends StatefulWidget {
+  const _StartupGate({required this.child});
+  final Widget child;
+
+  @override
+  State<_StartupGate> createState() => _StartupGateState();
+}
+
+class _StartupGateState extends State<_StartupGate> {
+  @override
+  void initState() {
+    super.initState();
+    startupController.addListener(_onChange);
+  }
+
+  @override
+  void dispose() {
+    startupController.removeListener(_onChange);
+    super.dispose();
+  }
+
+  void _onChange() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final phase = startupController.phase;
+    if (phase == StartupPhase.ready) return widget.child;
+
+    return CoreStartupScreen(
+      failed: phase == StartupPhase.failed,
+      message: startupController.errorMessage,
+      statusText: startupController.statusText,
+      onRetry: () => startupController.initCore(),
+      onSkip: startupController.skip,
     );
   }
 }
