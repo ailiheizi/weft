@@ -1,9 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/mcp_api.dart' show McpServer;
 import '../../../core/api/scene_api.dart' show Scene;
-import '../../../core/api/weft_claw_api.dart' show SelectorApi, McpPreset;
 import '../../../core/providers/scenes_provider.dart';
 import '../../../core/providers/skills_provider.dart';
 import '../../../core/providers/mcp_provider.dart';
@@ -73,6 +74,52 @@ class ScenesPanel extends ConsumerWidget {
     return parts.isEmpty
         ? (scene.description.isEmpty ? '(无额外偏好)' : scene.description)
         : parts.join(' · ');
+  }
+}
+
+/// 聊天工作区内的「技能」管理面板 — 真实技能列表(ext.skills),支持启用/禁用。
+class SkillsCatalogPanel extends ConsumerWidget {
+  const SkillsCatalogPanel({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final state = ref.watch(skillsCatalogProvider);
+    final notifier = ref.read(skillsCatalogProvider.notifier);
+
+    return _PanelScaffold(
+      title: '技能',
+      subtitle: 'agent 可用的工具技能 — 开关控制 AI 调用范围',
+      loading: state.loading,
+      error: state.error,
+      onRefresh: () => notifier.load(),
+      empty: state.skills.isEmpty,
+      emptyHint: '暂无技能。技能由已加载的包提供,检查 core 是否正常。',
+      children: [
+        for (final skill in state.skills)
+          _Row(
+            leading: Icon(
+              Icons.auto_awesome_outlined,
+              size: 18,
+              color: skill.enabled
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+            title: skill.name,
+            subtitle: skill.description,
+            trailing: SizedBox(
+              height: 28,
+              child: Switch(
+                value: skill.enabled,
+                onChanged: state.loading
+                    ? null
+                    : (v) => notifier.toggle(skill.name, v),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }
 
@@ -149,29 +196,307 @@ class SkillsPanel extends ConsumerWidget {
 class McpPanel extends ConsumerWidget {
   const McpPanel({super.key});
 
+  /// 添加入口:粘贴 JSON 导入(兼容全生态) 或 输入远程 URL。
   Future<void> _showAddDialog(BuildContext context, WidgetRef ref) async {
+    final choice = await showDialog<_AddChoice>(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 400),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(children: [
+                  const Expanded(
+                      child: Text('添加 MCP 工具',
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w600))),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ]),
+                const SizedBox(height: 4),
+                Text(
+                    '从 Smithery / Claude Desktop / GitHub 复制配置,或输入远程 URL',
+                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+                const SizedBox(height: 20),
+                // 粘贴 JSON
+                _AddOptionTile(
+                  icon: Icons.content_paste,
+                  title: '粘贴配置 JSON',
+                  subtitle: '兼容 Claude Desktop / Cursor / Smithery 格式',
+                  onTap: () => Navigator.pop(ctx, _AddChoice.paste()),
+                ),
+                const SizedBox(height: 10),
+                // 远程 URL
+                _AddOptionTile(
+                  icon: Icons.link,
+                  title: '远程 MCP (URL)',
+                  subtitle: '无需本地环境,直接连接 HTTP/SSE 服务器',
+                  onTap: () => Navigator.pop(ctx, _AddChoice.url()),
+                ),
+                const SizedBox(height: 10),
+                // 手动
+                _AddOptionTile(
+                  icon: Icons.edit_outlined,
+                  title: '手动添加',
+                  subtitle: '自填 command / args(高级)',
+                  onTap: () => Navigator.pop(ctx, _AddChoice.manual()),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (choice == null || !context.mounted) return;
+
+    if (choice.isManual) {
+      await _showManualDialog(context, ref);
+    } else if (choice.isPaste) {
+      await _showPasteDialog(context, ref);
+    } else if (choice.isUrl) {
+      await _showUrlDialog(context, ref);
+    }
+  }
+
+  // ── 粘贴 JSON 导入(核心功能) ─────────────────────────────────────────────
+
+  /// 解析 mcpServers JSON 配置(兼容 Claude Desktop + VS Code 格式)。
+  static List<_ParsedServer> _parseMcpJson(String raw) {
+    final results = <_ParsedServer>[];
+    try {
+      final obj = json.decode(raw.trim());
+      if (obj is! Map<String, dynamic>) return results;
+      // 兼容 {mcpServers: {...}} 或 {servers: {...}} 或直接 {"name": {...}}
+      final servers = (obj['mcpServers'] as Map<String, dynamic>?) ??
+          (obj['servers'] as Map<String, dynamic>?) ??
+          obj;
+      for (final entry in servers.entries) {
+        if (entry.value is! Map<String, dynamic>) continue;
+        final v = entry.value as Map<String, dynamic>;
+        final command = v['command'] as String? ?? '';
+        final args = (v['args'] as List? ?? [])
+            .whereType<String>()
+            .toList();
+        final env = (v['env'] as Map<String, dynamic>? ?? {})
+            .map((k, val) => MapEntry(k, val?.toString() ?? ''));
+        final url = v['url'] as String? ?? '';
+        final transport = url.isNotEmpty
+            ? 'sse'
+            : (v['type'] as String? ?? 'stdio');
+        results.add(_ParsedServer(
+          name: entry.key,
+          command: command,
+          args: args,
+          env: env,
+          url: url,
+          transport: transport,
+        ));
+      }
+    } catch (_) {}
+    return results;
+  }
+
+  /// 命令安全评估:白名单内的视为安全,否则警告。
+  static _CmdSafety _assessCommand(String command) {
+    const safe = {'npx', 'node', 'python', 'python3', 'uvx', 'uv', 'docker',
+        'deno', 'bun', 'go', 'cargo'};
+    final bin = command.split('/').last.split('\\').last.toLowerCase();
+    if (safe.contains(bin)) return _CmdSafety.normal;
+    const suspicious = {'cmd', 'cmd.exe', 'powershell', 'powershell.exe',
+        'pwsh', 'pwsh.exe', 'bash', 'sh', 'curl', 'wget', 'rm', 'del'};
+    if (suspicious.contains(bin)) return _CmdSafety.warning;
+    return _CmdSafety.unknown;
+  }
+
+  Future<void> _showPasteDialog(BuildContext context, WidgetRef ref) async {
+    final ctrl = TextEditingController();
+    final parsed = ValueNotifier<List<_ParsedServer>>([]);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560, maxHeight: 560),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('粘贴 MCP 配置', style: Theme.of(ctx).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text('支持 Claude Desktop / Cursor / VS Code / Smithery 格式',
+                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: TextField(
+                    controller: ctrl,
+                    maxLines: null,
+                    expands: true,
+                    textAlignVertical: TextAlignVertical.top,
+                    decoration: const InputDecoration(
+                      hintText: '{"mcpServers": {"name": {"command": "npx", "args": [...]}}}',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                    onChanged: (v) => parsed.value = _parseMcpJson(v),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // 解析预览
+                ValueListenableBuilder<List<_ParsedServer>>(
+                  valueListenable: parsed,
+                  builder: (_, servers, child2) {
+                    if (servers.isEmpty) {
+                      return Text('粘贴后自动解析...',
+                          style: Theme.of(ctx).textTheme.bodySmall);
+                    }
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('解析到 ${servers.length} 个服务器:',
+                            style: Theme.of(ctx).textTheme.labelMedium),
+                        const SizedBox(height: 6),
+                        for (final s in servers.take(5))
+                          _ParsedServerPreview(server: s),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('取消')),
+                  const SizedBox(width: 8),
+                  ValueListenableBuilder<List<_ParsedServer>>(
+                    valueListenable: parsed,
+                    builder: (_, servers, child2) => FilledButton(
+                      onPressed:
+                          servers.isEmpty ? null : () => Navigator.pop(ctx, true),
+                      child: Text('安装 (${servers.length})'),
+                    ),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+    final servers = parsed.value;
+    var installed = 0;
+    for (final s in servers) {
+      await ref.read(mcpProvider.notifier).add(McpServer(
+            name: s.name,
+            command: s.command.isNotEmpty ? s.command : s.url,
+            args: s.args,
+            transport: s.transport,
+          ));
+      installed++;
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('已添加 $installed 个 MCP 工具'),
+        duration: const Duration(seconds: 2),
+      ));
+    }
+  }
+
+  // ── 远程 URL 输入 ──────────────────────────────────────────────────────────
+
+  Future<void> _showUrlDialog(BuildContext context, WidgetRef ref) async {
     final nameCtrl = TextEditingController();
-    final cmdCtrl = TextEditingController();
-    final argsCtrl = TextEditingController();
+    final urlCtrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('添加 MCP Server'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(
-                  labelText: '名称', hintText: 'e.g. filesystem')),
-          TextField(
-              controller: cmdCtrl,
-              decoration:
-                  const InputDecoration(labelText: '命令', hintText: 'e.g. npx')),
-          TextField(
-              controller: argsCtrl,
-              decoration: const InputDecoration(
-                  labelText: '参数(空格分隔)',
-                  hintText: '-y @modelcontextprotocol/server-filesystem /path')),
-        ]),
+        title: const Text('远程 MCP Server'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(
+                    labelText: '名称', hintText: 'e.g. exa-search')),
+            TextField(
+                controller: urlCtrl,
+                decoration: const InputDecoration(
+                    labelText: 'URL',
+                    hintText: 'https://mcp.example.com/sse')),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('添加')),
+        ],
+      ),
+    );
+    if (ok == true && urlCtrl.text.trim().isNotEmpty) {
+      await ref.read(mcpProvider.notifier).add(McpServer(
+            name: nameCtrl.text.trim().isEmpty
+                ? Uri.tryParse(urlCtrl.text.trim())?.host ?? 'remote'
+                : nameCtrl.text.trim(),
+            command: urlCtrl.text.trim(),
+            args: const [],
+            transport: 'sse',
+          ));
+      if (context.mounted) {
+        final err = ref.read(mcpProvider).error;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text(err == null ? '已添加远程 MCP' : '添加失败: $err'),
+          duration: const Duration(seconds: 2),
+        ));
+      }
+    }
+  }
+
+  // ── 手动添加(高级) ─────────────────────────────────────────────────────────
+
+  Future<void> _showManualDialog(BuildContext context, WidgetRef ref) async {
+    final nameCtrl = TextEditingController();
+    final cmdCtrl = TextEditingController();
+    final argsCtrl = TextEditingController();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('手动添加 MCP Server'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(
+                    labelText: '名称', hintText: 'e.g. filesystem')),
+            TextField(
+                controller: cmdCtrl,
+                decoration: const InputDecoration(
+                    labelText: '命令', hintText: 'e.g. npx')),
+            TextField(
+                controller: argsCtrl,
+                decoration: const InputDecoration(
+                    labelText: '参数(空格分隔)',
+                    hintText:
+                        '-y @modelcontextprotocol/server-filesystem /path')),
+          ]),
+        ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -193,79 +518,15 @@ class McpPanel extends ConsumerWidget {
             command: cmdCtrl.text.trim(),
             args: args,
           ));
-    }
-  }
-
-  Future<void> _showPresetDialog(BuildContext context, WidgetRef ref) async {
-    final presets = await SelectorApi().listPresets();
-    if (!context.mounted) return;
-    if (presets.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('无法获取预置清单(selector 服务未运行?)')),
-      );
-      return;
-    }
-    final picked = await showDialog<McpPreset>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: const Text('从预置添加 MCP Server'),
-        children: [
-          SizedBox(
-            width: 420,
-            height: 420,
-            child: ListView.separated(
-              shrinkWrap: true,
-              itemCount: presets.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final p = presets[i];
-                return ListTile(
-                  dense: true,
-                  title: Row(
-                    children: [
-                      Flexible(child: Text(p.name)),
-                      const SizedBox(width: 6),
-                      _PresetBadge(label: p.category),
-                      if (p.needsKey) ...[
-                        const SizedBox(width: 4),
-                        const _PresetBadge(label: '需Key', warn: true),
-                      ],
-                    ],
-                  ),
-                  subtitle: Text(
-                    '${p.description}\n${p.command} ${p.args.join(' ')}',
-                    style: const TextStyle(fontSize: 11),
-                  ),
-                  isThreeLine: true,
-                  onTap: () => Navigator.pop(ctx, p),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-    if (picked == null || !context.mounted) return;
-
-    // Resolve ${WORKSPACE} placeholder to current dir marker; user can edit later.
-    final resolvedArgs = picked.args
-        .map((a) => a.replaceAll(r'${WORKSPACE}', '.'))
-        .toList();
-
-    await ref.read(mcpProvider.notifier).add(McpServer(
-          name: picked.id,
-          command: picked.command,
-          args: resolvedArgs,
-          transport: picked.transport,
+      if (context.mounted) {
+        final err = ref.read(mcpProvider).error;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(err == null
+              ? '已添加 ${nameCtrl.text.trim()}'
+              : '添加失败: $err'),
+          duration: const Duration(seconds: 2),
         ));
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(picked.needsKey
-              ? '已添加 ${picked.name}。需在 env 配置 ${picked.keyEnv} 后才能启动'
-              : '已添加 ${picked.name}，点启动运行'),
-        ),
-      );
+      }
     }
   }
 
@@ -282,7 +543,6 @@ class McpPanel extends ConsumerWidget {
       error: state.error,
       onRefresh: () => notifier.load(),
       onAdd: () => _showAddDialog(context, ref),
-      onPreset: () => _showPresetDialog(context, ref),
       empty: state.servers.isEmpty,
       emptyHint: '暂无 MCP server。点右上 + 添加。',
       children: [
@@ -324,30 +584,154 @@ class McpPanel extends ConsumerWidget {
   }
 }
 
-// ── 共用脚手架 ────────────────────────────────────────────────────────────────
+/// 添加流程的选择结果。
+class _AddChoice {
+  const _AddChoice._(this.isManual, this.isPaste, this.isUrl);
+  factory _AddChoice.manual() => const _AddChoice._(true, false, false);
+  factory _AddChoice.paste() => const _AddChoice._(false, true, false);
+  factory _AddChoice.url() => const _AddChoice._(false, false, true);
+  final bool isManual;
+  final bool isPaste;
+  final bool isUrl;
+}
 
-/// 预置项的小徽章(分类/需Key 标记)。
-class _PresetBadge extends StatelessWidget {
-  const _PresetBadge({required this.label, this.warn = false});
-  final String label;
-  final bool warn;
+/// 命令安全级别。
+enum _CmdSafety { normal, unknown, warning }
+
+/// 从粘贴 JSON 解析出的一个服务器条目。
+class _ParsedServer {
+  const _ParsedServer({
+    required this.name,
+    required this.command,
+    required this.args,
+    required this.env,
+    required this.url,
+    required this.transport,
+  });
+  final String name;
+  final String command;
+  final List<String> args;
+  final Map<String, String> env;
+  final String url;
+  final String transport;
+}
+
+/// 添加入口的一个选项磁贴。
+class _AddOptionTile extends StatelessWidget {
+  const _AddOptionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = warn ? Colors.orange : theme.colorScheme.primary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(4),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 22, color: theme.colorScheme.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: theme.textTheme.titleSmall),
+                  Text(subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right,
+                size: 18, color: theme.colorScheme.onSurfaceVariant),
+          ],
+        ),
       ),
-      child: Text(label,
-          style: TextStyle(
-              fontSize: 9, color: color, fontWeight: FontWeight.w600)),
     );
   }
 }
+
+/// 粘贴解析后的单个服务器预览(带命令安全提示)。
+class _ParsedServerPreview extends StatelessWidget {
+  const _ParsedServerPreview({required this.server});
+  final _ParsedServer server;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final safety = McpPanel._assessCommand(server.command);
+    final isRemote = server.url.isNotEmpty;
+    final (Color color, IconData icon, String note) = switch (safety) {
+      _CmdSafety.warning => (
+          theme.colorScheme.error,
+          Icons.warning_amber_rounded,
+          '可疑命令,请确认来源可信'
+        ),
+      _CmdSafety.unknown => (
+          theme.colorScheme.tertiary,
+          Icons.help_outline,
+          '非常见命令'
+        ),
+      _CmdSafety.normal => (
+          theme.colorScheme.primary,
+          Icons.check_circle_outline,
+          ''
+        ),
+    };
+    final cmdLine = isRemote
+        ? server.url
+        : '${server.command} ${server.args.join(' ')}'.trim();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(isRemote ? Icons.link : icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(server.name,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(fontWeight: FontWeight.w600)),
+                Text(cmdLine,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                        color: theme.colorScheme.onSurfaceVariant),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+                if (note.isNotEmpty)
+                  Text(note,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: color, fontSize: 11)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── 共用脚手架 ────────────────────────────────────────────────────────────────
 
 class _PanelScaffold extends StatelessWidget {
   const _PanelScaffold({
@@ -360,7 +744,6 @@ class _PanelScaffold extends StatelessWidget {
     required this.emptyHint,
     required this.children,
     this.onAdd,
-    this.onPreset,
   });
 
   final String title;
@@ -369,7 +752,6 @@ class _PanelScaffold extends StatelessWidget {
   final String? error;
   final VoidCallback onRefresh;
   final VoidCallback? onAdd;
-  final VoidCallback? onPreset;
   final bool empty;
   final String emptyHint;
   final List<Widget> children;
@@ -395,12 +777,6 @@ class _PanelScaffold extends StatelessWidget {
                 ],
               ),
             ),
-            if (onPreset != null)
-              IconButton(
-                icon: const Icon(Icons.auto_awesome_motion_outlined, size: 18),
-                tooltip: '从预置添加',
-                onPressed: loading ? null : onPreset,
-              ),
             if (onAdd != null)
               IconButton(
                 icon: const Icon(Icons.add, size: 18),

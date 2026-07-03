@@ -182,7 +182,12 @@ jobs:
           app="clients/weft_client/build/windows/x64/runner/Release"
           mkdir -p "$bundle"
           cp -r "$app"/* "$bundle"/
-          # Sidecar core next to the client exe (matches CoreProcessManager search).
+          # FFI core: the client embeds weft_core.dll in-process (complete FFI mode).
+          # flutter build does NOT emit this DLL into the Release dir, so copy it
+          # explicitly — without it the client panics at startup (frb wire mismatch).
+          cp core/target/x86_64-pc-windows-msvc/release/weft_core.dll "$bundle"/
+          # Sidecar core next to the client exe (fallback when FFI init fails;
+          # matches CoreProcessManager search).
           cp core/target/x86_64-pc-windows-msvc/release/weft-core.exe "$bundle"/
           for b in weft weft-sign weft-rpc; do
             [ -f "core/target/x86_64-pc-windows-msvc/release/$b.exe" ] && cp "core/target/x86_64-pc-windows-msvc/release/$b.exe" "$bundle"/ || true
@@ -207,6 +212,8 @@ jobs:
           for d in packages/official/*/; do
             name=$(basename "$d")
             [ -f "$d/package.toml" ] || continue
+            # tool-selector is an optional extension, not bundled by default.
+            [[ "$name" == "tool-selector" ]] && continue
             mkdir -p "$bundle/packages/official/$name"
             cp "$d/package.toml" "$bundle/packages/official/$name"/
             # Compiled wasm (if built by the WASM step above).
@@ -260,34 +267,6 @@ jobs:
           cp config.example.toml "$bundle"/ 2>/dev/null || true
           7z a "$bundle.zip" "./$bundle/*"
 
-      - name: Assemble full bundle (with tool-selector AI runtime)
-        shell: bash
-        run: |
-          bundle="weft-desktop-windows-x86_64"
-          full="weft-desktop-windows-x86_64-full"
-          # Start from the slim bundle.
-          cp -r "$bundle" "$full"
-          # Download the prebuilt tool-selector runtime + ONNX model from the
-          # universal-selector release into the package's runtime/ dir.
-          ts="$full/packages/official/tool-selector/runtime"
-          mkdir -p "$ts/models"
-          base="https://github.com/ailiheizi/universal-selector/releases/download/v0.1.0"
-          curl -fL --retry 3 -o "$ts/tool-selector.exe" "$base/tool-selector.exe"
-          curl -fL --retry 3 -o "$ts/models/model_int8.onnx" "$base/model_int8.onnx"
-          curl -fL --retry 3 -o "$ts/models/tokenizer.json" "$base/tokenizer.json"
-          curl -fL --retry 3 -o "$ts/models/tokenizer_config.json" "$base/tokenizer_config.json"
-          # Point the package entry at the native exe (full edition only).
-          tsel="$full/packages/official/tool-selector/package.toml"
-          if [ -f "$tsel" ]; then
-            sed -i 's#^entry = .*#entry = "runtime/tool-selector.exe"#' "$tsel"
-            sed -i 's#^startup_command = .*#startup_command = "runtime/tool-selector.exe"#' "$tsel"
-            sed -i 's#^startup_args = .*#startup_args = ["--http", "--port", "17860", "--libraries-dir", "service/libraries"]#' "$tsel"
-            # Full edition ships the model, so auto-start the selector service
-            # (lets the client's /status probe succeed and light up the chips).
-            sed -i 's#^startup_mode = .*#startup_mode = "persistent"#' "$tsel"
-          fi
-          7z a "$full.zip" "./$full/*"
-
       - name: Build installer
         shell: bash
         run: |
@@ -295,11 +274,6 @@ jobs:
           curl -fsSL -o is-setup.exe "https://files.jrsoftware.org/is/6/innosetup-6.4.3.exe"
           ./is-setup.exe //VERYSILENT //SUPPRESSMSGBOXES //DIR="./innosetup"
           version="${GITHUB_REF_NAME#v}"
-          # Build slim installer
-          ./innosetup/ISCC.exe //DAppVersion="$version" installer/weft.iss
-          # Build full installer (rewrite source and output name)
-          sed -i 's|weft-desktop-windows-x86_64|weft-desktop-windows-x86_64-full|g' installer/weft.iss
-          sed -i 's|weft-setup-|weft-setup-full-|g' installer/weft.iss
           ./innosetup/ISCC.exe //DAppVersion="$version" installer/weft.iss
 
       - uses: actions/upload-artifact@v4
@@ -307,7 +281,6 @@ jobs:
           name: weft-desktop-windows-x86_64
           path: |
             weft-desktop-windows-x86_64.zip
-            weft-desktop-windows-x86_64-full.zip
             installer-output/*.exe
 
   # ---- 3. Publish the GitHub Release with all artifacts ---------------------

@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 
-import 'management_tabs.dart' show ScenesPanel, SkillsPanel, McpPanel;
-import '../../settings/selector_management_screen.dart' show SelectorPanel;
+import 'management_tabs.dart'
+    show ScenesPanel, SkillsCatalogPanel, McpPanel;
 
 /// 聊天内统一设置面板（右侧抽屉内容）。
 ///
-/// 4 个 Tab：场景 / 技能 / MCP / 工具选择器。
-/// 复用已有的 ScenesPanel / SkillsPanel / McpPanel / SelectorPanel，
+/// 3 个 Tab：场景 / 技能 / MCP。
+/// 复用已有的 ScenesPanel / SkillsCatalogPanel / McpPanel，
 /// 它们都是纯 Column（无 Scaffold），可直接嵌入 TabBarView。
 class ChatSettingsPanel extends StatefulWidget {
   const ChatSettingsPanel({super.key, this.initialIndex = 0});
 
-  /// 初始选中的 Tab（0=场景 1=技能 2=MCP 3=工具选择器）。
+  /// 初始选中的 Tab（0=场景 1=技能 2=MCP）。
   final int initialIndex;
 
   @override
@@ -26,7 +26,6 @@ class _ChatSettingsPanelState extends State<ChatSettingsPanel>
     (icon: Icons.tune, label: '场景'),
     (icon: Icons.auto_awesome_outlined, label: '技能'),
     (icon: Icons.cloud_outlined, label: 'MCP'),
-    (icon: Icons.auto_awesome, label: '工具选择器'),
   ];
 
   @override
@@ -102,9 +101,8 @@ class _ChatSettingsPanelState extends State<ChatSettingsPanel>
                 controller: _tabController,
                 children: const [
                   ScenesPanel(),
-                  SkillsPanel(),
+                  SkillsCatalogPanel(),
                   McpPanel(),
-                  SelectorPanel(),
                 ],
               ),
             ),

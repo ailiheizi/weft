@@ -339,13 +339,3 @@ signature = "builtin:official"
 source_authority = "official"
 provides = ["tool.browser"]
 
-[[package_sources]]
-name = "tool-selector"
-kind = "wasm"
-package_kind = "provider"
-runtime_provider = "tool-selector"
-current_source = "packages/installed/tool-selector"
-trusted = true
-signature = "builtin:official"
-source_authority = "official"
-provides = ["tool.selector"]

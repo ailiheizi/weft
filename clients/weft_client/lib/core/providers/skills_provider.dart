@@ -7,6 +7,92 @@ final skillsApiProvider = Provider<SkillsApi>((ref) {
   return SkillsApi(ref.watch(apiClientProvider));
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// 真实技能列表(ext.skills 的 list_skills / enable / disable)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class SkillsCatalogState {
+  const SkillsCatalogState({
+    this.agent = 'weft-claw',
+    this.skills = const [],
+    this.loading = false,
+    this.error,
+  });
+
+  final String agent;
+  final List<SkillInfo> skills;
+  final bool loading;
+  final String? error;
+
+  SkillsCatalogState copyWith({
+    List<SkillInfo>? skills,
+    bool? loading,
+    String? error,
+    bool clearError = false,
+  }) {
+    return SkillsCatalogState(
+      agent: agent,
+      skills: skills ?? this.skills,
+      loading: loading ?? this.loading,
+      error: clearError ? null : (error ?? this.error),
+    );
+  }
+}
+
+class SkillsCatalogNotifier extends StateNotifier<SkillsCatalogState> {
+  SkillsCatalogNotifier(this._api) : super(const SkillsCatalogState()) {
+    load();
+  }
+
+  final SkillsApi _api;
+
+  Future<void> load() async {
+    state = state.copyWith(loading: true, clearError: true);
+    try {
+      final skills = await _api.listSkills(state.agent);
+      state = state.copyWith(skills: skills, loading: false, clearError: true);
+    } catch (e) {
+      state = state.copyWith(loading: false, error: _sanitize(e));
+    }
+  }
+
+  Future<void> toggle(String name, bool enable) async {
+    try {
+      if (enable) {
+        await _api.enable(state.agent, name);
+      } else {
+        await _api.disable(state.agent, name);
+      }
+      // 乐观更新 UI
+      state = state.copyWith(
+        skills: state.skills
+            .map((s) => s.name == name ? s.copyWith(enabled: enable) : s)
+            .toList(),
+      );
+    } catch (e) {
+      state = state.copyWith(error: _sanitize(e));
+      await load(); // 回滚
+    }
+  }
+
+  static String _sanitize(Object e) {
+    final s = e.toString();
+    if (s.contains('SocketException') || s.contains('Connection')) {
+      return '无法连接到 weft-core';
+    }
+    return s.length > 120 ? '${s.substring(0, 120)}…' : s;
+  }
+}
+
+final skillsCatalogProvider =
+    StateNotifierProvider<SkillsCatalogNotifier, SkillsCatalogState>((ref) {
+  return SkillsCatalogNotifier(ref.watch(skillsApiProvider));
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 演化技能治理(skills.governance 的 list_evolved / review_evolved)
+// ═══════════════════════════════════════════════════════════════════════════════
+
 class SkillsState {
   const SkillsState({
     this.agent = 'weft-claw',
