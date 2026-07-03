@@ -431,7 +431,98 @@ fn do_web_fetch(data: &Value) -> PackageResult {
     }))
 }
 
-// ─── host-based web search (Bing) ─────────────────────────────────────────────
+// ─── Tavily Search API ────────────────────────────────────────────────────────
+
+fn try_tavily_search(api_key: &str, query: &str, limit: usize) -> Option<PackageResult> {
+    let body = serde_json::json!({
+        "api_key": api_key,
+        "query": query,
+        "max_results": limit,
+        "search_depth": "basic",
+    })
+    .to_string();
+
+    let response_text = http_request(
+        "POST",
+        "https://api.tavily.com/search",
+        &[("Content-Type", "application/json")],
+        &body,
+    )
+    .ok()?;
+
+    let parsed: Value = serde_json::from_str(&response_text).ok()?;
+
+    // Check for error in response
+    if parsed.get("error").is_some() {
+        return None;
+    }
+
+    let tavily_results = parsed.get("results")?.as_array()?;
+    if tavily_results.is_empty() {
+        return None;
+    }
+
+    let results: Vec<Value> = tavily_results
+        .iter()
+        .take(limit)
+        .map(|item| {
+            serde_json::json!({
+                "title": item.get("title").and_then(Value::as_str).unwrap_or(""),
+                "url": item.get("url").and_then(Value::as_str).unwrap_or(""),
+                "text": item.get("content").and_then(Value::as_str).unwrap_or(""),
+            })
+        })
+        .collect();
+
+    // Build summary
+    let mut summary_parts = Vec::new();
+    if let Some(first) = results.first() {
+        let title = first.get("title").and_then(Value::as_str).unwrap_or("").trim();
+        let text = first.get("text").and_then(Value::as_str).unwrap_or("").trim();
+        if !title.is_empty() && !text.is_empty() {
+            summary_parts.push(format!("Top result: {}. {}", title, text));
+        } else if !text.is_empty() {
+            summary_parts.push(format!("Top result: {}", text));
+        } else if !title.is_empty() {
+            summary_parts.push(format!("Top result: {}", title));
+        }
+    }
+    if !results.is_empty() {
+        let bullets = results
+            .iter()
+            .map(|entry| {
+                let title = entry.get("title").and_then(Value::as_str).unwrap_or("").trim();
+                let text = entry.get("text").and_then(Value::as_str).unwrap_or("").trim();
+                if title.is_empty() {
+                    format!("- {}", text)
+                } else if text.is_empty() {
+                    format!("- {}", title)
+                } else {
+                    format!("- {}: {}", title, text)
+                }
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+        if !bullets.trim().is_empty() {
+            summary_parts.push(format!("Related results:\n{}", bullets));
+        }
+    }
+
+    let summary = if summary_parts.is_empty() {
+        format!("No concise web result found for '{}'.", query)
+    } else {
+        summary_parts.join("\n")
+    };
+
+    Some(PackageResult::ok(serde_json::json!({
+        "query": query,
+        "results": results,
+        "summary": summary,
+        "source": "tavily",
+    })))
+}
+
+// ─── host-based web search (Tavily preferred, Bing fallback) ──────────────────
 
 fn do_web_search(data: &Value) -> PackageResult {
     let query = data
@@ -457,6 +548,21 @@ fn do_web_search(data: &Value) -> PackageResult {
         normalized
     };
 
+    // Try Tavily API if a search_api_key is provided in data
+    let api_key = data
+        .get("search_api_key")
+        .and_then(Value::as_str)
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    if let Some(key) = api_key {
+        if let Some(result) = try_tavily_search(&key, &search_query, limit) {
+            return result;
+        }
+        // Tavily failed, fall through to Bing
+    }
+
+    // Fallback: Bing HTML scraping
     let url = format!(
         "https://cn.bing.com/search?q={}",
         urlencoding::encode(&search_query),

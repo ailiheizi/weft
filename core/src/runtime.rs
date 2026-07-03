@@ -420,8 +420,26 @@ pub async fn run_server() -> anyhow::Result<()> {
     let data_dir = resolve_data_dir(&repo_root, &config.core.data_dir);
 
     // Enable wasmtime compiled-module cache for faster WASM plugin reloads.
-    // Extism/wasmtime cache: disabled for now (format compatibility issues).
-    // TODO: investigate correct cache config format for extism 1.9 / wasmtime 43.
+    // Extism/wasmtime cache: accelerates second-and-later startups by caching
+    // compiled wasm modules to disk. Key is file content hash (auto-invalidates
+    // on package update). Wasmtime 43 format: [cache] + directory (no `enabled`).
+    if std::env::var("EXTISM_CACHE_CONFIG").is_err() {
+        let cache_dir = data_dir.join("wasm-cache");
+        let _ = std::fs::create_dir_all(&cache_dir);
+        let cache_config_path = data_dir.join("wasmtime-cache.toml");
+        // Wasmtime 43 requires forward slashes and absolute path, no `enabled` field.
+        let cache_config_content = format!(
+            "[cache]\ndirectory = \"{}\"\n",
+            cache_dir.to_string_lossy().replace('\\', "/")
+        );
+        if std::fs::write(&cache_config_path, &cache_config_content).is_ok() {
+            std::env::set_var("EXTISM_CACHE_CONFIG", cache_config_path.to_string_lossy().as_ref());
+            tracing::info!(
+                cache_config = %cache_config_path.display(),
+                "WASM module cache enabled"
+            );
+        }
+    }
 
     let (runtime_token, runtime_token_path) = ensure_runtime_token(&data_dir)?;
     tracing::info!(
