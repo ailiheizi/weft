@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/models/chat.dart';
 import '../../core/providers/chat_provider.dart';
@@ -1350,9 +1351,79 @@ class _AssistantContent extends StatelessWidget {
   final bool showCursor;
   final AnimationController cursorController;
 
+  MarkdownStyleSheet _buildStyleSheet(BuildContext context) {
+    final theme = Theme.of(context);
+    final codeBg = GlassTokens.innerTileFillOf(context);
+    final codeBlockDecoration = BoxDecoration(
+      color: codeBg,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(
+        color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+      ),
+    );
+
+    return MarkdownStyleSheet.fromTheme(theme).copyWith(
+      // Text styles
+      p: theme.textTheme.bodyMedium
+          ?.copyWith(color: theme.colorScheme.onSurface),
+      h1: theme.textTheme.titleLarge
+          ?.copyWith(color: theme.colorScheme.onSurface),
+      h2: theme.textTheme.titleMedium
+          ?.copyWith(color: theme.colorScheme.onSurface),
+      h3: theme.textTheme.titleSmall
+          ?.copyWith(color: theme.colorScheme.onSurface),
+      // Inline code
+      code: theme.textTheme.bodySmall?.copyWith(
+        fontFamily: 'monospace',
+        color: theme.colorScheme.primary,
+        backgroundColor: codeBg,
+      ),
+      codeblockPadding: const EdgeInsets.all(12),
+      codeblockDecoration: codeBlockDecoration,
+      // Links
+      a: theme.textTheme.bodyMedium?.copyWith(
+        color: theme.colorScheme.primary,
+        decoration: TextDecoration.underline,
+        decorationColor: theme.colorScheme.primary.withValues(alpha: 0.5),
+      ),
+      // Block quote
+      blockquoteDecoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            color: theme.colorScheme.primary.withValues(alpha: 0.5),
+            width: 3,
+          ),
+        ),
+      ),
+      blockquotePadding: const EdgeInsets.only(left: 12, top: 4, bottom: 4),
+      // Table
+      tableHead: theme.textTheme.bodySmall?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: theme.colorScheme.onSurface,
+      ),
+      tableBody: theme.textTheme.bodySmall
+          ?.copyWith(color: theme.colorScheme.onSurface),
+      tableBorder: TableBorder.all(
+        color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+      ),
+      tableCellsPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      // Spacing
+      blockSpacing: 10,
+    );
+  }
+
+  void _onTapLink(String text, String? href, String title) {
+    if (href == null || href.isEmpty) return;
+    final uri = Uri.tryParse(href);
+    if (uri != null) {
+      launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final styleSheet = _buildStyleSheet(context);
 
     if (content.isEmpty && showCursor) {
       return AnimatedBuilder(
@@ -1372,15 +1443,9 @@ class _AssistantContent extends StatelessWidget {
           final cursor = cursorController.value > 0.5 ? '▋' : '';
           return MarkdownBody(
             data: content + cursor,
-            styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-              p: theme.textTheme.bodyMedium
-                  ?.copyWith(color: theme.colorScheme.onSurface),
-              code: theme.textTheme.bodySmall?.copyWith(
-                fontFamily: 'monospace',
-                backgroundColor: GlassTokens.innerTileFillOf(context),
-              ),
-            ),
+            styleSheet: styleSheet,
             selectable: true,
+            onTapLink: _onTapLink,
           );
         },
       );
@@ -1388,15 +1453,9 @@ class _AssistantContent extends StatelessWidget {
 
     return MarkdownBody(
       data: content.isEmpty ? '…' : content,
-      styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-        p: theme.textTheme.bodyMedium
-            ?.copyWith(color: theme.colorScheme.onSurface),
-        code: theme.textTheme.bodySmall?.copyWith(
-          fontFamily: 'monospace',
-          backgroundColor: GlassTokens.innerTileFillOf(context),
-        ),
-      ),
+      styleSheet: styleSheet,
       selectable: true,
+      onTapLink: _onTapLink,
     );
   }
 }

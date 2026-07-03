@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/constants.dart';
 import '../../core/providers/connection_provider.dart';
 import '../../core/providers/catalog_service.dart';
 import '../../core/providers/data_providers.dart';
 import '../../core/providers/preferences_provider.dart';
+import '../../core/providers/update_checker.dart';
 import '../../shared/widgets/app_shell.dart' show PulseDot;
 
 class SettingsScreen extends ConsumerWidget {
@@ -40,6 +42,8 @@ class SettingsScreen extends ConsumerWidget {
 
     int? countOf(AsyncValue v) => v.asData?.value.length as int?;
 
+    final updateInfo = ref.watch(updateCheckerProvider);
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ListView(
@@ -49,6 +53,9 @@ class SettingsScreen extends ConsumerWidget {
               style: theme.textTheme.headlineSmall
                   ?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 24),
+          // --- Update checker banner ---
+          _UpdateBanner(updateInfo: updateInfo),
+          const SizedBox(height: 16),
           _Section(
             title: 'Connection',
             children: [
@@ -181,7 +188,7 @@ class SettingsScreen extends ConsumerWidget {
               _SettingTile(
                 icon: Icons.info_outline,
                 title: 'WEFT Client',
-                subtitle: 'v0.1.0',
+                subtitle: 'v$kAppVersion',
                 onTap: null,
               ),
               const Divider(height: 1),
@@ -511,6 +518,88 @@ class _WorkspaceDirTile extends StatelessWidget {
       subtitle: currentDir.isEmpty ? '默认 (data/workspaces/)' : currentDir,
       trailing: const Icon(Icons.edit_outlined, size: 15),
       onTap: () => _edit(context),
+    );
+  }
+}
+
+/// Banner showing update availability or current-version confirmation.
+class _UpdateBanner extends StatelessWidget {
+  const _UpdateBanner({required this.updateInfo});
+  final AsyncValue<UpdateInfo> updateInfo;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return updateInfo.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (info) {
+        if (info.available) {
+          return Card(
+            color: theme.colorScheme.primaryContainer,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.system_update_outlined,
+                      color: theme.colorScheme.onPrimaryContainer, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '新版本可用: v${info.latestVersion}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onPrimaryContainer,
+                          ),
+                        ),
+                        Text(
+                          '当前版本: v$kAppVersion',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onPrimaryContainer
+                                .withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  FilledButton.tonal(
+                    onPressed: () {
+                      final url = info.downloadUrl;
+                      if (url != null) {
+                        launchUrl(Uri.parse(url),
+                            mode: LaunchMode.externalApplication);
+                      }
+                    },
+                    child: const Text('下载更新'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // Up to date
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle_outline,
+                    color: const Color(0xFF4CB782), size: 20),
+                const SizedBox(width: 12),
+                Text(
+                  '当前版本: v$kAppVersion ✔ 已是最新',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
