@@ -271,7 +271,7 @@ jobs:
         shell: bash
         run: |
           # Install Inno Setup silently
-          curl -fsSL -o is-setup.exe "https://files.jrsoftware.org/is/6/innosetup-6.4.3.exe"
+          curl -fsSL -o is-setup.exe "https://jrsoftware.org/download.php/is.exe"
           ./is-setup.exe //VERYSILENT //SUPPRESSMSGBOXES //DIR="./innosetup"
           version="${GITHUB_REF_NAME#v}"
           ./innosetup/ISCC.exe //DAppVersion="$version" installer/weft.iss
