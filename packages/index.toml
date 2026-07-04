@@ -338,4 +338,3 @@ trusted = true
 signature = "builtin:official"
 source_authority = "official"
 provides = ["tool.browser"]
-

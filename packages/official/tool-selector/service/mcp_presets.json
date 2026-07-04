@@ -121,6 +121,42 @@
       "needs_node": true,
       "needs_key": false,
       "note": "免 key 模式下 firecrawl_scrape / firecrawl_search 直接可用（按 IP 限流，走 Firecrawl 云端）；crawl/extract 等其余工具需 FIRECRAWL_API_KEY（firecrawl.dev 免费申请）。自托管可设 FIRECRAWL_API_URL。"
+    },
+    {
+      "id": "time",
+      "name": "时间/时区",
+      "category": "工具",
+      "description": "获取当前时间、时区转换",
+      "command": "uvx",
+      "args": ["mcp-server-time"],
+      "transport": "stdio",
+      "needs_node": false,
+      "needs_key": false,
+      "note": "官方 MCP server，查询当前时间与时区换算，免 key；需 uv 环境(uvx)"
+    },
+    {
+      "id": "duckduckgo",
+      "name": "DuckDuckGo 搜索",
+      "category": "网络",
+      "description": "免 key 网页搜索 + 内容抓取，无需 API key",
+      "command": "uvx",
+      "args": ["duckduckgo-mcp-server"],
+      "transport": "stdio",
+      "needs_node": false,
+      "needs_key": false,
+      "note": "免 key 网页搜索(DuckDuckGo)；可选 env DDG_REGION=cn-zh 设置区域；需 uv 环境(uvx)"
+    },
+    {
+      "id": "markitdown",
+      "name": "MarkItDown 转换",
+      "category": "工具",
+      "description": "URL/文档转 Markdown（支持 PDF/DOCX/PPTX/HTML 等）",
+      "command": "uvx",
+      "args": ["markitdown-mcp"],
+      "transport": "stdio",
+      "needs_node": false,
+      "needs_key": false,
+      "note": "微软 MarkItDown 的 MCP 封装，URL 或本地文件转 Markdown，免 key；需 uv 环境(uvx)"
     }
   ]
 }

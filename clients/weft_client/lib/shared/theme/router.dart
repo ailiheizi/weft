@@ -7,6 +7,7 @@ import '../../features/apps/package_surface_screen.dart';
 import '../../features/chat/chat_screen.dart';
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/management/management_screens.dart';
+import '../../features/skills/skills_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/orchestration/orchestration_screen.dart';
 import '../../features/packages/packages_screen.dart';

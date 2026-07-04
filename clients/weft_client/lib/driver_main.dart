@@ -8,5 +8,5 @@ import 'main.dart' as app;
 void main() {
   // 必须在 runApp 之前启用，driver 才能连接并操作 UI。
   enableFlutterDriverExtension();
-  app.main();
+  app.main([]);
 }

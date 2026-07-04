@@ -29,6 +29,11 @@ Future<List<ProviderConfig>> providers(Ref ref) async {
 }
 
 @riverpod
+Future<Map<String, dynamic>> routing(Ref ref) async {
+  return ref.watch(coreRepositoryProvider).getRouting();
+}
+
+@riverpod
 Future<List<PackageInfo>> packages(Ref ref) async {
   return ref.watch(coreRepositoryProvider).getPackages();
 }

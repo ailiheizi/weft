@@ -9,9 +9,9 @@ class ScenesScreen extends StatelessWidget {
   Widget build(BuildContext context) => const _Page(child: ScenesPanel());
 }
 
-/// 技能管理页。
-class SkillsScreen extends StatelessWidget {
-  const SkillsScreen({super.key});
+/// 演化技能管理页(agent 结晶的可复用流程)。
+class EvolvedSkillsScreen extends StatelessWidget {
+  const EvolvedSkillsScreen({super.key});
   @override
   Widget build(BuildContext context) => const _Page(child: SkillsPanel());
 }

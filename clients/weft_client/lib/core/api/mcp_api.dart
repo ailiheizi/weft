@@ -45,6 +45,66 @@ class McpApi {
   Future<void> stopServer(String agent, String name) async {
     await _call('stop_server', {'agent': agent, 'name': name});
   }
+
+  /// 拉取工具列表 + 诊断,返回每个 server 的连接情况。
+  Future<McpToolsInfo> getTools(String agent) async {
+    final data = await _call(
+        'get_tools', {'agent': agent, 'include_diagnostics': true});
+    final tools = (data['tools'] as List? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+    // 按 server 统计工具数(工具对象里带 server 字段)。
+    final countByServer = <String, int>{};
+    for (final t in tools) {
+      final s = t['server'] as String? ?? t['server_name'] as String? ?? '';
+      if (s.isNotEmpty) countByServer[s] = (countByServer[s] ?? 0) + 1;
+    }
+    final diags = (data['diagnostics'] as List? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map(McpDiagnostic.fromJson)
+        .toList();
+    return McpToolsInfo(
+      totalTools: tools.length,
+      countByServer: countByServer,
+      diagnostics: diags,
+    );
+  }
+}
+
+/// get_tools 的返回:总工具数 + 按 server 分组 + 诊断。
+class McpToolsInfo {
+  const McpToolsInfo({
+    required this.totalTools,
+    required this.countByServer,
+    required this.diagnostics,
+  });
+  final int totalTools;
+  final Map<String, int> countByServer;
+  final List<McpDiagnostic> diagnostics;
+
+  static const empty =
+      McpToolsInfo(totalTools: 0, countByServer: {}, diagnostics: []);
+}
+
+/// 单个 server 的工具发现诊断。
+class McpDiagnostic {
+  const McpDiagnostic({
+    required this.server,
+    required this.source,
+    required this.liveError,
+    required this.cachedTools,
+  });
+  final String server;
+  final String source; // "live" / "cache" / "none"
+  final String? liveError;
+  final int cachedTools;
+
+  factory McpDiagnostic.fromJson(Map<String, dynamic> j) => McpDiagnostic(
+        server: j['server'] as String? ?? '',
+        source: j['source'] as String? ?? '',
+        liveError: j['live_error'] as String?,
+        cachedTools: (j['cached_tools'] as num?)?.toInt() ?? 0,
+      );
 }
 
 class McpServer {

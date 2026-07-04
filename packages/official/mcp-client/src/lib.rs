@@ -174,17 +174,21 @@ fn try_parse_stdio_line(buffer: &mut Vec<u8>) -> Result<Option<serde_json::Value
 
     let line = buffer[..line_end].to_vec();
     buffer.drain(0..=line_end);
-    let trimmed = String::from_utf8(line)
-        .map_err(|error| format!("invalid MCP stdio line encoding: {}", error))?
-        .trim()
-        .to_string();
+    let trimmed = String::from_utf8_lossy(&line).trim().to_string();
     if trimmed.is_empty() {
         return Ok(None);
     }
 
-    let response = serde_json::from_str::<serde_json::Value>(&trimmed)
-        .map_err(|error| format!("invalid MCP stdio JSON line: {}", error))?;
-    Ok(Some(response))
+    // npx/node 冷启动时 stdout 可能混入 npm 警告、进度等非 JSON 噪音行。
+    // 只接受以 '{' 开头的 JSON-RPC 行,其余当噪音丢弃(返回 None,让上层继续读)。
+    if !trimmed.starts_with('{') {
+        return Ok(None);
+    }
+    match serde_json::from_str::<serde_json::Value>(&trimmed) {
+        Ok(value) => Ok(Some(value)),
+        // 半行/不完整 JSON 也当噪音跳过,避免整个探测因一行脏数据失败。
+        Err(_) => Ok(None),
+    }
 }
 
 fn try_parse_stdio_message(buffer: &mut Vec<u8>) -> Result<Option<serde_json::Value>, String> {
@@ -407,7 +411,11 @@ fn do_list_servers(agent: &str) -> PackageResult {
             serde_json::json!({
                 "name": s.name,
                 "command": s.command,
+                "args": s.args,
+                "env": s.env,
                 "transport": s.transport,
+                "url": s.url,
+                "headers": s.headers,
                 "status": serde_json::from_str::<serde_json::Value>(&status)
                     .unwrap_or(serde_json::json!({"status":"unknown"})),
             })
@@ -681,7 +689,9 @@ fn stdio_jsonrpc_exchange(
     let payload = encode_stdio_message(&request_value)?;
     process_write_stdin(process_name, &payload)?;
 
-    let deadline = Instant::now() + Duration::from_secs(10);
+    // 首次启动 MCP server(尤其 npx/uvx 冷启动需下载/解析包)可能较慢,
+    // 给 30 秒窗口,避免 stdio 探测过早超时。
+    let deadline = Instant::now() + Duration::from_secs(30);
     let mut pending = Vec::<u8>::new();
     while Instant::now() < deadline {
         let read = process_read_stdout(process_name, *offset)?;

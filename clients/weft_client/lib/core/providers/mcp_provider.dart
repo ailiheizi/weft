@@ -13,12 +13,14 @@ class McpState {
     this.servers = const [],
     this.loading = false,
     this.error,
+    this.toolsInfo = McpToolsInfo.empty,
   });
 
   final String agent;
   final List<McpServer> servers;
   final bool loading;
   final String? error;
+  final McpToolsInfo toolsInfo;
 
   McpState copyWith({
     String? agent,
@@ -26,12 +28,14 @@ class McpState {
     bool? loading,
     String? error,
     bool clearError = false,
+    McpToolsInfo? toolsInfo,
   }) {
     return McpState(
       agent: agent ?? this.agent,
       servers: servers ?? this.servers,
       loading: loading ?? this.loading,
       error: clearError ? null : (error ?? this.error),
+      toolsInfo: toolsInfo ?? this.toolsInfo,
     );
   }
 }
@@ -49,8 +53,20 @@ class McpNotifier extends StateNotifier<McpState> {
       final servers = await _api.listServers(state.agent);
       state =
           state.copyWith(servers: servers, loading: false, clearError: true);
+      // 顺带拉工具信息(失败不影响服务器列表展示)。
+      _refreshTools();
     } catch (e) {
       state = state.copyWith(loading: false, error: _sanitize(e));
+    }
+  }
+
+  /// 异步拉取工具数与诊断,不阻塞列表加载。
+  Future<void> _refreshTools() async {
+    try {
+      final info = await _api.getTools(state.agent);
+      state = state.copyWith(toolsInfo: info);
+    } catch (_) {
+      // 工具拉取失败静默,不覆盖服务器列表。
     }
   }
 

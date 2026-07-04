@@ -190,6 +190,9 @@ impl ProcessManager {
 
         svc.status = ServiceStatus::Starting;
 
+        // Windows 上 npx/npm/uvx 等是 .cmd 批处理。Rust 的 Command::new
+        // 通过 CreateProcessW 间接调用 cmd.exe 启动它们,stdin/stdout 管道正常。
+        // 不要用 cmd /c 包装(cmd /c 会搞乱 stdin/stdout 管道,导致 MCP stdio 超时)。
         let mut cmd = Command::new(&svc.config.command);
         cmd.args(&svc.config.args);
 

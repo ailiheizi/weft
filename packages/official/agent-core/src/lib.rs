@@ -2794,32 +2794,61 @@ fn build_completion_request(
             }
         }
     }
-    // Inject selected MCP tool descriptions into dynamic context.
-    // When selected_tools contains "mcp:server:tool" entries, we fetch the tool
-    // descriptions from mcp-client and append a hint so AI knows to use ext_mcp_call_tool.
+    // Inject connected MCP tools into dynamic context so the AI knows what MCP
+    // tools are available and can call them via ext_mcp_call_tool.
+    // We actively query ext.mcp/get_tools (all connected servers) rather than
+    // relying on a selected_tools allowlist — otherwise installed MCP servers
+    // stay invisible to the model.
     {
-        let mcp_selected: Option<Vec<String>> = session_id_from_agent_name(&config.name)
-            .and_then(|sid| kv_get(&format!("selected_tools:{}", sid)))
-            .and_then(|j| serde_json::from_str(&j).ok());
-        if let Some(ref names) = mcp_selected {
-            let mcp_entries: Vec<&String> = names.iter().filter(|n| n.starts_with("mcp:")).collect();
-            if !mcp_entries.is_empty() {
-                if !dynamic_context.is_empty() {
-                    dynamic_context.push_str("\n\n");
-                }
-                dynamic_context.push_str("[Available MCP tools — call via ext_mcp_call_tool]\n");
-                for entry in &mcp_entries {
-                    // Format: "mcp:server_name:tool_name"
-                    let parts: Vec<&str> = entry.splitn(3, ':').collect();
-                    if parts.len() == 3 {
-                        let server = parts[1];
-                        let tool = parts[2];
+        let agent = &config.name;
+        let tools_result = call_capability_action(
+            "ext.mcp",
+            "get_tools",
+            &serde_json::json!({"agent": agent, "include_diagnostics": false}),
+        );
+        if let Ok(raw) = tools_result {
+            // 返回形如 {"response":{"data":{"tools":[{name,description,server,...}]}}}
+            // 或直接 {"data":{"tools":[...]}} / {"tools":[...]},逐层兜底解析。
+            let parsed: Option<serde_json::Value> = serde_json::from_str(&raw).ok();
+            let tools = parsed.as_ref().and_then(|v| {
+                v.pointer("/response/data/tools")
+                    .or_else(|| v.pointer("/data/tools"))
+                    .or_else(|| v.get("tools"))
+                    .and_then(|t| t.as_array())
+                    .cloned()
+            });
+            if let Some(tools) = tools {
+                if !tools.is_empty() {
+                    if !dynamic_context.is_empty() {
+                        dynamic_context.push_str("\n\n");
+                    }
+                    dynamic_context.push_str(
+                        "[Available MCP tools — call via ext_mcp_call_tool]\n",
+                    );
+                    for tool in tools.iter().take(80) {
+                        let name = tool.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                        if name.is_empty() {
+                            continue;
+                        }
+                        let server = tool
+                            .get("server")
+                            .or_else(|| tool.get("server_name"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        let desc = tool
+                            .get("description")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        let desc_short: String = desc.chars().take(160).collect();
                         dynamic_context.push_str(&format!(
-                            "- server=\"{}\" tool=\"{}\"\n", server, tool
+                            "- server=\"{}\" tool=\"{}\": {}\n",
+                            server, name, desc_short
                         ));
                     }
+                    dynamic_context.push_str(
+                        "To use any tool above, call ext_mcp_call_tool with its server and tool name.",
+                    );
                 }
-                dynamic_context.push_str("To call these tools, use ext_mcp_call_tool with the server and tool names above.");
             }
         }
     }
@@ -4202,90 +4231,6 @@ fn virtual_capability_tools(config: &AgentConfig) -> Vec<VirtualCapabilityToolSp
             }),
             provider_candidates: provider_candidates_for_capability(config, "channel.bridge"),
             summary_kind: VirtualCapabilitySummaryKind::ChannelSend,
-        },
-        VirtualCapabilityToolSpec {
-            name: "browser_navigate",
-            capability: "tool.browser",
-            action: "navigate",
-            description: "Navigate the automated browser to a URL. Starts a browser session automatically if needed. Use this to open a web page before reading or interacting with it.",
-            parameters: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "The URL to open in the automated browser"
-                    }
-                },
-                "required": ["url"]
-            }),
-            provider_candidates: provider_candidates_for_capability(config, "tool.browser"),
-            summary_kind: VirtualCapabilitySummaryKind::BrowserTool,
-        },
-        VirtualCapabilityToolSpec {
-            name: "browser_snapshot",
-            capability: "tool.browser",
-            action: "snapshot",
-            description: "Take an accessibility-tree snapshot of the current page. Returns page elements each with a unique uid. You MUST call this before browser_click/browser_fill to obtain the uid of the element you want to interact with.",
-            parameters: serde_json::json!({
-                "type": "object",
-                "properties": {},
-                "required": []
-            }),
-            provider_candidates: provider_candidates_for_capability(config, "tool.browser"),
-            summary_kind: VirtualCapabilitySummaryKind::BrowserTool,
-        },
-        VirtualCapabilityToolSpec {
-            name: "browser_click",
-            capability: "tool.browser",
-            action: "click",
-            description: "Click an element on the page identified by its uid (obtained from browser_snapshot).",
-            parameters: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "uid": {
-                        "type": "string",
-                        "description": "The element uid from a prior browser_snapshot"
-                    }
-                },
-                "required": ["uid"]
-            }),
-            provider_candidates: provider_candidates_for_capability(config, "tool.browser"),
-            summary_kind: VirtualCapabilitySummaryKind::BrowserTool,
-        },
-        VirtualCapabilityToolSpec {
-            name: "browser_fill",
-            capability: "tool.browser",
-            action: "fill",
-            description: "Fill a text input or select field identified by its uid (from browser_snapshot) with a value.",
-            parameters: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "uid": {
-                        "type": "string",
-                        "description": "The element uid from a prior browser_snapshot"
-                    },
-                    "value": {
-                        "type": "string",
-                        "description": "The text/value to enter into the element"
-                    }
-                },
-                "required": ["uid", "value"]
-            }),
-            provider_candidates: provider_candidates_for_capability(config, "tool.browser"),
-            summary_kind: VirtualCapabilitySummaryKind::BrowserTool,
-        },
-        VirtualCapabilityToolSpec {
-            name: "browser_screenshot",
-            capability: "tool.browser",
-            action: "screenshot",
-            description: "Take a screenshot of the current browser page. Returns image data.",
-            parameters: serde_json::json!({
-                "type": "object",
-                "properties": {},
-                "required": []
-            }),
-            provider_candidates: provider_candidates_for_capability(config, "tool.browser"),
-            summary_kind: VirtualCapabilitySummaryKind::BrowserTool,
         },
         VirtualCapabilityToolSpec {
             name: "semantic_select",

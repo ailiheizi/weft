@@ -15,7 +15,7 @@ cargo build --release
 ```bash
 # 需要 config/config.toml 配置文件
 cargo run --release
-# 默认监听 127.0.0.1:17830
+# 默认监听 127.0.0.1:3004
 ```
 
 ## 配置
@@ -25,7 +25,7 @@ cargo run --release
 ```toml
 [core]
 host = "127.0.0.1"
-port = 17830
+port = 3004
 
 [[providers]]
 name = "deepseek"

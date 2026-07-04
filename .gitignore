@@ -113,3 +113,51 @@ Thumbs.db
 showcase/
 packages/official/context-engine/
 packages/official/generic-agent-runtime/
+
+# ===== 私有基础设施配置 =====
+.gitea/
+
+# ===== AI 工具/工作区缓存 =====
+.plans/
+.sisyphus/
+aiplan-check.md
+.trash/
+_trash/
+
+# ===== 私有不进开源的目录 =====
+catalog/
+clients/web-canvas/
+core/tests/fixtures/
+deploy/
+reference/
+server/
+services/
+workspace/
+
+# ===== 构建产物 / 本地脚本 =====
+release-bundle/
+clients/weft_client/release-bundle/
+run-core.bat
+scripts/
+packages/official/tool-selector/native/
+
+# ===== 内部诊断/临时文件 =====
+.cdn_decision.md
+.cdn_diag.md
+.url_decision.md
+.playwright-mcp/
+
+# ===== 内部仓库配置 =====
+.github/CODEOWNERS
+
+# ===== 本地运行配置（config.example.toml 已在根目录）=====
+config/
+
+# ===== 本地包 .gitignore 及安装产物 =====
+packages/.gitignore
+packages/installed/tool-browser/
+packages/installed/tool-selector/
+
+# ===== Numpy 嵌入（大体积二进制，不进 git）=====
+*.npy
+*.npy.idx

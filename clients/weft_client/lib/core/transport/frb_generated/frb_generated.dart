@@ -82,6 +82,12 @@ abstract class RustLibApi extends BaseApi {
 
   Future<String> crateFfiStartCore({required String projectRoot});
 
+  Future<String> crateFfiStartCoreWithOptions({
+    required String projectRoot,
+    required String dataDir,
+    required String configDir,
+  });
+
   Future<void> crateFfiStopCore();
 }
 
@@ -175,6 +181,43 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateFfiStartCoreConstMeta =>
       const TaskConstMeta(debugName: "start_core", argNames: ["projectRoot"]);
+
+  @override
+  Future<String> crateFfiStartCoreWithOptions({
+    required String projectRoot,
+    required String dataDir,
+    required String configDir,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(projectRoot, serializer);
+          sse_encode_String(dataDir, serializer);
+          sse_encode_String(configDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 5,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateFfiStartCoreWithOptionsConstMeta,
+        argValues: [projectRoot, dataDir, configDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateFfiStartCoreWithOptionsConstMeta =>
+      const TaskConstMeta(
+        debugName: "start_core_with_options",
+        argNames: ["projectRoot", "dataDir", "configDir"],
+      );
 
   @override
   Future<void> crateFfiStopCore() {

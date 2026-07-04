@@ -1501,21 +1501,62 @@ impl WasmPackageHost {
             ..host_state
         };
 
-        for info in load_infos {
-            match Self::build_plugin(info, &base_state) {
+        // Build plugins in parallel. wasmtime compilation (inside build_plugin ->
+        // load_one -> PluginBuilder::build) is CPU-bound and independent per package:
+        // each plugin gets its own UserData clone (shared Arcs), and cross-package
+        // init() calls happen only after this constructor returns. To avoid
+        // oversubscribing wasmtime's internal cranelift threadpool we distribute the
+        // packages across a bounded worker pool sized to the available cores rather
+        // than spawning one thread per package. extism `Plugin` is `Send`, so each
+        // worker can return the built plugins to the parent scope.
+        let built: Vec<(String, Result<Plugin>)> = if load_infos.len() <= 1 {
+            load_infos
+                .iter()
+                .map(|info| (info.name.clone(), Self::build_plugin(info, &base_state)))
+                .collect()
+        } else {
+            let worker_count = std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1)
+                .min(load_infos.len());
+            let base_state_ref = &base_state;
+            std::thread::scope(|scope| {
+                let handles: Vec<_> = (0..worker_count)
+                    .map(|worker_idx| {
+                        // Round-robin partition so each worker gets a balanced share.
+                        let chunk: Vec<&PackageLoadInfo> = load_infos
+                            .iter()
+                            .skip(worker_idx)
+                            .step_by(worker_count)
+                            .collect();
+                        scope.spawn(move || {
+                            chunk
+                                .into_iter()
+                                .map(|info| {
+                                    (info.name.clone(), Self::build_plugin(info, base_state_ref))
+                                })
+                                .collect::<Vec<(String, Result<Plugin>)>>()
+                        })
+                    })
+                    .collect();
+                handles
+                    .into_iter()
+                    .flat_map(|h| h.join().expect("wasm build worker panicked"))
+                    .collect()
+            })
+        };
+
+        for (name, result) in built {
+            match result {
                 Ok(package) => {
-                    tracing::info!(
-                        "Loaded WASM package '{}' from {}",
-                        info.name,
-                        info.wasm_path.display()
-                    );
+                    tracing::info!("Loaded WASM package '{}'", name);
                     package_map
                         .lock()
                         .unwrap()
-                        .insert(info.name.clone(), Arc::new(StdMutex::new(package)));
+                        .insert(name, Arc::new(StdMutex::new(package)));
                 }
                 Err(e) => {
-                    tracing::error!("Failed to load WASM package '{}': {}", info.name, e);
+                    tracing::error!("Failed to load WASM package '{}': {}", name, e);
                 }
             }
         }

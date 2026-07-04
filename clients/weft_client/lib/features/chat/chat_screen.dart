@@ -12,7 +12,6 @@ import '../../core/providers/data_providers.dart';
 import '../../core/providers/preferences_provider.dart';
 import '../../core/providers/sessions_provider.dart';
 import '../../core/providers/scenes_provider.dart';
-import '../../core/providers/selector_provider.dart';
 import '../../shared/widgets/glass_card.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/resizable_handle.dart';
@@ -49,7 +48,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       duration: const Duration(milliseconds: 600),
     )..repeat(reverse: true);
     _scrollController.addListener(_onScroll);
-    _textController.addListener(_onTextChangedForSelector);
 
     // 启动时若无活跃 session，自动创建一个
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -60,16 +58,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         ref.read(activeSessionIdProvider.notifier).state = meta.id;
       }
     });
-  }
-
-  void _onTextChangedForSelector() {
-    final sessionId = ref.read(activeSessionIdProvider);
-    if (sessionId == null) return;
-    ref.read(inputTextProvider(sessionId).notifier).state =
-        _textController.text;
-    ref
-        .read(toolSelectorProvider(sessionId).notifier)
-        .onTextChanged(_textController.text);
   }
 
   void _onScroll() {
@@ -85,7 +73,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   @override
   void dispose() {
     _scrollController.removeListener(_onScroll);
-    _textController.removeListener(_onTextChangedForSelector);
     _textController.dispose();
     _scrollController.dispose();
     _cursorController.dispose();
@@ -114,15 +101,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final text = _textController.text.trim();
     if (text.isEmpty) return;
     _textController.clear();
-    // Read selected tools before clearing.
-    final selectedTools = ref
-        .read(toolSelectorProvider(sessionId))
-        .selectedToolIds;
-    ref.read(chatProvider(sessionId).notifier).sendMessage(
-      text,
-      selectedTools: selectedTools.isNotEmpty ? selectedTools : null,
-    );
-    ref.read(toolSelectorProvider(sessionId).notifier).clear();
+    ref.read(chatProvider(sessionId).notifier).sendMessage(text);
     // 发送后恢复自动跟随并滚到底部。
     _atBottom = true;
     _scrollToBottom();
@@ -270,7 +249,6 @@ class _ChatArea extends ConsumerWidget {
                       ],
                     ),
         ),
-        _ToolSelectorChips(sessionId: sessionId),
         _InputBar(
           controller: textController,
           isStreaming: session.isStreaming,
@@ -1494,260 +1472,6 @@ const _slashCommands = [
 
 typedef _SlashCmd = ({String cmd, String desc, String usage});
 
-// ─── 工具自动选择芯片条 ────────────────────────────────────────────────────────
-
-class _ToolSelectorChips extends ConsumerWidget {
-  const _ToolSelectorChips({required this.sessionId});
-
-  final String sessionId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final selectorState = ref.watch(toolSelectorProvider(sessionId));
-    final session = ref.watch(chatProvider(sessionId));
-    final theme = Theme.of(context);
-    final isInjected = selectorState.active.isNotEmpty && session.isStreaming;
-    final modelReady = selectorState.modelReady;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // ── 控制行：始终可见 ──
-          Row(
-            children: [
-              // 主按钮：手动触发 / 显示状态
-              _SelectorButton(sessionId: sessionId),
-              const SizedBox(width: 8),
-              if (selectorState.loading)
-                SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-              if (!selectorState.loading && selectorState.active.isNotEmpty)
-                Text(
-                  isInjected ? '✓ 已注入 ${selectorState.active.length} 个工具' : '${selectorState.active.length} 个工具已选',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: isInjected
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              // ── 模型未就绪提示 ──
-              if (!modelReady) ...[
-                const SizedBox(width: 6),
-                Tooltip(
-                  message: '语义选择引擎需要下载模型',
-                  child: Icon(
-                    Icons.info_outline,
-                    size: 14,
-                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          // ── 芯片展示区：有结果时展示 ──
-          if (selectorState.matches.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Opacity(
-              opacity: modelReady ? 1.0 : 0.4,
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: [
-                  for (final match in selectorState.active)
-                    Tooltip(
-                      message: modelReady ? '' : '语义选择引擎需要下载模型',
-                      child: InputChip(
-                        label: Text(
-                          '${match.name} ${(match.score * 100).toStringAsFixed(0)}%',
-                          style: theme.textTheme.labelSmall,
-                        ),
-                        avatar: Icon(_toolIcon(match.id), size: 14),
-                        deleteIcon: const Icon(Icons.close, size: 14),
-                        onDeleted: () => ref
-                            .read(toolSelectorProvider(sessionId).notifier)
-                            .deselect(match.id),
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ),
-                  // Deselected: faded, tappable to re-add
-                  for (final match in selectorState.matches
-                      .where((m) => selectorState.deselected.contains(m.id)))
-                    ActionChip(
-                      label: Text(
-                        match.name,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                        ),
-                      ),
-                      onPressed: () => ref
-                          .read(toolSelectorProvider(sessionId).notifier)
-                          .reselect(match.id),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  IconData _toolIcon(String toolId) {
-    return switch (toolId) {
-      'web_search' => Icons.search,
-      'file_read' || 'file_write' => Icons.description,
-      'shell_exec' || 'run_command' => Icons.terminal,
-      'image_gen' => Icons.image,
-      'calculator' => Icons.calculate,
-      'translate' => Icons.translate,
-      'code_run' || 'python_exec' => Icons.code,
-      'todoist' || 'todo' => Icons.checklist,
-      _ => Icons.build_circle_outlined,
-    };
-  }
-}
-
-/// 工具选择主按钮：
-/// - 点击：手动触发 selector
-/// - 旁边小三角展开菜单：切换自动/关闭
-class _SelectorButton extends ConsumerWidget {
-  const _SelectorButton({required this.sessionId});
-
-  final String sessionId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(toolSelectorProvider(sessionId));
-    final theme = Theme.of(context);
-    final modelReady = state.modelReady;
-
-    final isActive = state.autoSelect;
-    final Color color = !modelReady
-        ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4)
-        : isActive
-            ? theme.colorScheme.primary
-            : theme.colorScheme.onSurfaceVariant;
-
-    final button = Container(
-      height: 28,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: color.withValues(alpha: 0.3),
-          width: 1,
-        ),
-        color: isActive && modelReady
-            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
-            : Colors.transparent,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 主按钮区域
-          InkWell(
-            borderRadius: const BorderRadius.horizontal(left: Radius.circular(14)),
-            onTap: modelReady
-                ? () {
-                    final text = ref.read(inputTextProvider(sessionId));
-                    if (text.trim().isNotEmpty) {
-                      ref.read(toolSelectorProvider(sessionId).notifier)
-                          .manualSelect(text);
-                    }
-                  }
-                : null,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.auto_awesome, size: 14, color: color),
-                  const SizedBox(width: 4),
-                  Text(
-                    '工具',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: color,
-                      fontWeight: isActive && modelReady ? FontWeight.w600 : FontWeight.normal,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // 分隔线 + 下拉箭头
-          Container(width: 1, height: 16, color: color.withValues(alpha: 0.2)),
-          PopupMenuButton<String>(
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-            position: PopupMenuPosition.over,
-            icon: Icon(Icons.expand_less, size: 14, color: color),
-            tooltip: '',
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'toggle_auto',
-                height: 36,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isActive ? Icons.toggle_on : Icons.toggle_off,
-                      size: 20,
-                      color: isActive ? theme.colorScheme.primary : null,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(isActive ? '自动选择：开' : '自动选择：关',
-                        style: theme.textTheme.bodySmall),
-                  ],
-                ),
-              ),
-              if (state.matches.isNotEmpty)
-                PopupMenuItem(
-                  value: 'clear',
-                  height: 36,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.clear_all, size: 20),
-                      const SizedBox(width: 8),
-                      Text('清除选择', style: theme.textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-            ],
-            onSelected: (value) {
-              switch (value) {
-                case 'toggle_auto':
-                  ref.read(toolSelectorProvider(sessionId).notifier)
-                      .toggleAutoSelect();
-                case 'clear':
-                  ref.read(toolSelectorProvider(sessionId).notifier).clear();
-              }
-            },
-          ),
-        ],
-      ),
-    );
-
-    if (!modelReady) {
-      return Tooltip(
-        message: '语义选择引擎需要下载模型',
-        child: Opacity(opacity: 0.6, child: button),
-      );
-    }
-    return button;
-  }
-}
 
 class _InputBar extends StatefulWidget {
   const _InputBar({

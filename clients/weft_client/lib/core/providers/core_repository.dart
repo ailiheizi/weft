@@ -141,6 +141,24 @@ class CoreRepository {
     await _dio.delete('/api/providers/$name');
   }
 
+  // --- Routing ---
+  /// 获取当前路由配置(从 /api/providers 响应中提取 routing 字段)。
+  Future<Map<String, dynamic>> getRouting() async {
+    final res = await _dio.get<Map<String, dynamic>>('/api/providers');
+    return (res.data?['routing'] as Map<String, dynamic>?) ?? {};
+  }
+
+  /// 更新路由配置(default_provider / image_provider 等)。
+  Future<void> updateRouting({
+    String? defaultProvider,
+    String? imageProvider,
+  }) async {
+    final data = <String, dynamic>{};
+    if (defaultProvider != null) data['default_provider'] = defaultProvider;
+    if (imageProvider != null) data['image_provider'] = imageProvider;
+    await _dio.put('/api/routing', data: data);
+  }
+
   // --- Packages ---
   Future<List<PackageInfo>> getPackages() async {
     final res = await _dio.get<Map<String, dynamic>>('/api/packages/runtime');

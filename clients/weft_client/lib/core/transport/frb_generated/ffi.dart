@@ -9,10 +9,27 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `rt`
 
 /// 启动 weft-core:加载配置、启动 WASM packages、绑定 HTTP(给 webview 用)。
-/// project_root: 项目根目录绝对路径(含 config/config.toml + packages/ + data/)。
+/// project_root: 项目根目录绝对路径(含 packages/)。
+///               config/config.toml 不再强制要求 — 不存在时用默认配置。
 /// 返回空字符串=成功,非空=错误信息。
 Future<String> startCore({required String projectRoot}) =>
     RustLib.instance.api.crateFfiStartCore(projectRoot: projectRoot);
+
+/// 完整 FFI 启动入口:接受显式的 data_dir 和 config_dir。
+/// - projectRoot: 运行时根目录(含 packages/ 子目录)。
+/// - dataDir: 可写数据目录(存 runtime-token / KV / wasm-cache)。空字符串=默认。
+/// - configDir: 配置目录(含 config.toml)。空字符串=默认。
+/// 返回空字符串=成功,非空=错误信息。
+Future<String> startCoreWithOptions({
+  required String projectRoot,
+  required String dataDir,
+  required String configDir,
+}) =>
+    RustLib.instance.api.crateFfiStartCoreWithOptions(
+      projectRoot: projectRoot,
+      dataDir: dataDir,
+      configDir: configDir,
+    );
 
 /// 统一 RPC 调用:传入 JSON RequestEnvelope → 返回 JSON ResponseEnvelope。
 /// 与 /rpc 端点格式一致,但走进程内 HTTP loopback(Phase 3a)。

@@ -196,6 +196,24 @@ final providersProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef ProvidersRef = AutoDisposeFutureProviderRef<List<ProviderConfig>>;
+String _$routingHash() => r'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0';
+
+/// See also [routing].
+@ProviderFor(routing)
+final routingProvider =
+    AutoDisposeFutureProvider<Map<String, dynamic>>.internal(
+      routing,
+      name: r'routingProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$routingHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef RoutingRef = AutoDisposeFutureProviderRef<Map<String, dynamic>>;
 String _$packagesHash() => r'44f49495cbc8038244eb5d6268231742376837e3';
 
 /// See also [packages].

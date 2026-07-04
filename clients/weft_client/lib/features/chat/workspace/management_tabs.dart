@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/api/mcp_api.dart' show McpServer;
+import '../../../core/api/mcp_api.dart'
+    show McpServer, McpToolsInfo, McpDiagnostic;
 import '../../../core/api/scene_api.dart' show Scene;
 import '../../../core/providers/scenes_provider.dart';
 import '../../../core/providers/skills_provider.dart';
@@ -203,7 +204,7 @@ class McpPanel extends ConsumerWidget {
       builder: (ctx) => Dialog(
         insetPadding: const EdgeInsets.all(24),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 400),
+          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 520),
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -225,7 +226,29 @@ class McpPanel extends ConsumerWidget {
                     '从 Smithery / Claude Desktop / GitHub 复制配置,或输入远程 URL',
                     style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                         color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
+                // 常用工具快捷安装(无需 API key,npx 直装)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('常用工具',
+                      style: Theme.of(ctx).textTheme.labelMedium?.copyWith(
+                          color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final p in _presetServers)
+                      ActionChip(
+                        avatar: Icon(p.icon, size: 16),
+                        label: Text(p.label),
+                        onPressed: () => Navigator.pop(ctx, _AddChoice.preset(p)),
+                      ),
+                  ],
+                ),
+                const Divider(height: 24),
+                const SizedBox(height: 4),
                 // 粘贴 JSON
                 _AddOptionTile(
                   icon: Icons.content_paste,
@@ -264,16 +287,57 @@ class McpPanel extends ConsumerWidget {
       await _showPasteDialog(context, ref);
     } else if (choice.isUrl) {
       await _showUrlDialog(context, ref);
+    } else if (choice.preset != null) {
+      await _installPreset(context, ref, choice.preset!);
     }
   }
 
-  // ── 粘贴 JSON 导入(核心功能) ─────────────────────────────────────────────
+  /// 一键安装预置常用工具。
+  Future<void> _installPreset(
+      BuildContext context, WidgetRef ref, _PresetServer p) async {
+    await ref.read(mcpProvider.notifier).add(McpServer(
+          name: p.name,
+          command: p.command,
+          args: p.args,
+        ));
+    if (context.mounted) {
+      final err = ref.read(mcpProvider).error;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(err == null ? '已添加 ${p.label}' : '添加失败: $err'),
+        duration: const Duration(seconds: 2),
+      ));
+    }
+  }
+
+  // ── 粘贴导入(智能多格式解析) ──────────────────────────────────────────────
+
+  /// 智能解析多种 MCP 安装格式:
+  /// 1. JSON (Claude Desktop / VS Code / Smithery)
+  /// 2. `claude mcp add <name> [--transport sse] [--] <command|url> <args...>`
+  /// 3. `code --add-mcp '{json}'`
+  /// 4. 裸命令 `npx -y <pkg> ...` / `uvx <pkg>`
+  static List<_ParsedServer> _parseMcpConfig(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return [];
+    // 先试 JSON。
+    final jsonResult = _parseMcpJson(text);
+    if (jsonResult.isNotEmpty) return jsonResult;
+    // 再试 CLI 命令。
+    return _parseMcpCli(text);
+  }
 
   /// 解析 mcpServers JSON 配置(兼容 Claude Desktop + VS Code 格式)。
   static List<_ParsedServer> _parseMcpJson(String raw) {
     final results = <_ParsedServer>[];
+    // 从文本中提取第一个 JSON 对象(容忍前后有说明文字)。
+    var text = raw.trim();
+    final braceStart = text.indexOf('{');
+    final braceEnd = text.lastIndexOf('}');
+    if (braceStart >= 0 && braceEnd > braceStart) {
+      text = text.substring(braceStart, braceEnd + 1);
+    }
     try {
-      final obj = json.decode(raw.trim());
+      final obj = json.decode(text);
       if (obj is! Map<String, dynamic>) return results;
       // 兼容 {mcpServers: {...}} 或 {servers: {...}} 或直接 {"name": {...}}
       final servers = (obj['mcpServers'] as Map<String, dynamic>?) ??
@@ -305,6 +369,170 @@ class McpPanel extends ConsumerWidget {
     return results;
   }
 
+  /// 解析 CLI 安装命令(claude mcp add / code --add-mcp / 裸 npx)。
+  static List<_ParsedServer> _parseMcpCli(String raw) {
+    // 去掉行首 `$ ` 之类前缀,合并多行续行符。
+    var line = raw
+        .replaceAll('\\\n', ' ')
+        .replaceAll('\r', ' ')
+        .replaceAll('\n', ' ')
+        .trim();
+    if (line.startsWith('\$')) line = line.substring(1).trim();
+
+    final tokens = _tokenize(line);
+    if (tokens.isEmpty) return [];
+
+    // 形式 A: code --add-mcp '{json}'
+    final addMcpIdx = tokens.indexOf('--add-mcp');
+    if (addMcpIdx >= 0 && addMcpIdx + 1 < tokens.length) {
+      final j = _parseMcpJson(tokens[addMcpIdx + 1]);
+      if (j.isNotEmpty) return j;
+    }
+
+    // 形式 B: claude mcp add [flags] <name> [--] <command|url> [args...]
+    final mcpIdx = tokens.indexOf('mcp');
+    if (mcpIdx >= 0 &&
+        mcpIdx + 1 < tokens.length &&
+        tokens[mcpIdx + 1] == 'add') {
+      return [_parseClaudeAdd(tokens.sublist(mcpIdx + 2))];
+    }
+
+    // 形式 C: 裸命令,如 `npx -y @scope/pkg arg` 或 `uvx pkg`
+    const runners = {'npx', 'uvx', 'uv', 'node', 'python', 'python3', 'bun',
+        'deno', 'docker'};
+    if (runners.contains(tokens.first)) {
+      // 拒绝"安装器"命令 —— 它们跑完即退出,不是可常驻的 MCP server。
+      // 如 `npx @michaellatman/mcp-get install <pkg>` / smithery install。
+      if (_isInstallerCommand(tokens)) return [];
+      final name = _guessNameFromArgs(tokens);
+      return [
+        _ParsedServer(
+          name: name,
+          command: tokens.first,
+          args: tokens.sublist(1),
+          env: {},
+          url: '',
+          transport: 'stdio',
+        )
+      ];
+    }
+
+    return [];
+  }
+
+  /// 解析 `claude mcp add` 之后的 token(不含 `claude mcp add`)。
+  static _ParsedServer _parseClaudeAdd(List<String> toks) {
+    var transport = 'stdio';
+    var url = '';
+    final env = <String, String>{};
+    String? name;
+    final rest = <String>[];
+
+    for (var i = 0; i < toks.length; i++) {
+      final t = toks[i];
+      if (t == '--transport' || t == '-t') {
+        if (i + 1 < toks.length) transport = toks[++i];
+      } else if (t == '--env' || t == '-e') {
+        if (i + 1 < toks.length) {
+          final kv = toks[++i];
+          final eq = kv.indexOf('=');
+          if (eq > 0) env[kv.substring(0, eq)] = kv.substring(eq + 1);
+        }
+      } else if (t == '--') {
+        rest.addAll(toks.sublist(i + 1));
+        break;
+      } else if (t.startsWith('-')) {
+        // 跳过其它未知 flag(及其可能的值由下轮判断)。
+        continue;
+      } else if (name == null) {
+        name = t;
+      } else {
+        rest.add(t);
+      }
+    }
+
+    // rest 第一个是 command 或 url。
+    if (rest.isNotEmpty &&
+        (rest.first.startsWith('http://') ||
+            rest.first.startsWith('https://'))) {
+      url = rest.first;
+      if (transport == 'stdio') transport = 'sse';
+      return _ParsedServer(
+        name: name ?? Uri.tryParse(url)?.host ?? 'mcp',
+        command: '',
+        args: const [],
+        env: env,
+        url: url,
+        transport: transport,
+      );
+    }
+    return _ParsedServer(
+      name: name ?? 'mcp',
+      command: rest.isNotEmpty ? rest.first : '',
+      args: rest.length > 1 ? rest.sublist(1) : const [],
+      env: env,
+      url: url,
+      transport: transport,
+    );
+  }
+
+  /// 从 npx/uvx 参数里猜一个 server 名(取包名最后一段)。
+  /// 检测是否为"安装器"命令(跑完即退出,不能当常驻 MCP server)。
+  static bool _isInstallerCommand(List<String> tokens) {
+    final joined = tokens.join(' ').toLowerCase();
+    // 已知的安装器包 / 子命令。
+    const installerPkgs = [
+      'mcp-get',
+      '@michaellatman/mcp-get',
+      '@smithery/cli',
+      'smithery',
+    ];
+    for (final p in installerPkgs) {
+      if (joined.contains(p)) return true;
+    }
+    return false;
+  }
+
+  static String _guessNameFromArgs(List<String> tokens) {
+    for (final t in tokens.skip(1)) {
+      if (t.startsWith('-')) continue;
+      // @scope/server-foo → foo;pkg-bar → pkg-bar
+      var pkg = t.split('/').last;
+      pkg = pkg.replaceFirst(RegExp(r'^(mcp-)?server-'), '');
+      pkg = pkg.replaceFirst(RegExp(r'-mcp$'), '');
+      if (pkg.isNotEmpty) return pkg;
+    }
+    return 'mcp';
+  }
+
+  /// 简单 shell tokenizer:按空格切分,尊重单/双引号。
+  static List<String> _tokenize(String s) {
+    final tokens = <String>[];
+    final buf = StringBuffer();
+    String? quote;
+    for (var i = 0; i < s.length; i++) {
+      final c = s[i];
+      if (quote != null) {
+        if (c == quote) {
+          quote = null;
+        } else {
+          buf.write(c);
+        }
+      } else if (c == '"' || c == "'") {
+        quote = c;
+      } else if (c == ' ' || c == '\t') {
+        if (buf.isNotEmpty) {
+          tokens.add(buf.toString());
+          buf.clear();
+        }
+      } else {
+        buf.write(c);
+      }
+    }
+    if (buf.isNotEmpty) tokens.add(buf.toString());
+    return tokens;
+  }
+
   /// 命令安全评估:白名单内的视为安全,否则警告。
   static _CmdSafety _assessCommand(String command) {
     const safe = {'npx', 'node', 'python', 'python3', 'uvx', 'uv', 'docker',
@@ -334,7 +562,7 @@ class McpPanel extends ConsumerWidget {
               children: [
                 Text('粘贴 MCP 配置', style: Theme.of(ctx).textTheme.titleMedium),
                 const SizedBox(height: 4),
-                Text('支持 Claude Desktop / Cursor / VS Code / Smithery 格式',
+                Text('支持 JSON 配置、claude mcp add 命令、npx/uvx 命令 — 直接粘贴',
                     style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                         color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
                 const SizedBox(height: 12),
@@ -345,12 +573,12 @@ class McpPanel extends ConsumerWidget {
                     expands: true,
                     textAlignVertical: TextAlignVertical.top,
                     decoration: const InputDecoration(
-                      hintText: '{"mcpServers": {"name": {"command": "npx", "args": [...]}}}',
+                      hintText: 'claude mcp add my-server -- npx -y @scope/server\n或\n{"mcpServers": {...}}\n或\nnpx -y @modelcontextprotocol/server-filesystem .',
                       border: OutlineInputBorder(),
                       contentPadding: EdgeInsets.all(12),
                     ),
                     style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                    onChanged: (v) => parsed.value = _parseMcpJson(v),
+                    onChanged: (v) => parsed.value = _parseMcpConfig(v),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -530,6 +758,33 @@ class McpPanel extends ConsumerWidget {
     }
   }
 
+  /// server 卡片副标题:命令行 + 连接状态(优先展示诊断)。
+  static String _serverSubtitle(McpServer s, McpToolsInfo info) {
+    final cmdLine = s.url != null && s.url!.isNotEmpty
+        ? s.url!
+        : '${s.command}${s.args.isNotEmpty ? ' ${s.args.join(' ')}' : ''}';
+    // 查该 server 的诊断。
+    final diag = info.diagnostics
+        .where((d) => d.server == s.name)
+        .cast<McpDiagnostic?>()
+        .firstWhere((_) => true, orElse: () => null);
+    String statusText;
+    if (diag != null) {
+      if (diag.liveError != null && diag.liveError!.isNotEmpty) {
+        statusText = diag.cachedTools > 0
+            ? '⚠ 连接失败,使用缓存(${diag.cachedTools} 工具)'
+            : '⚠ 连接失败';
+      } else if (diag.source == 'live') {
+        statusText = '✓ 已连接';
+      } else {
+        statusText = s.status;
+      }
+    } else {
+      statusText = s.status;
+    }
+    return '$cmdLine · $statusText';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -558,9 +813,12 @@ class McpPanel extends ConsumerWidget {
                   : null,
             ),
             title: s.name,
-            badges: [s.transport],
-            subtitle:
-                '${s.command}${s.args.isNotEmpty ? ' ${s.args.join(' ')}' : ''} · ${s.status}',
+            badges: [
+              s.transport,
+              if (state.toolsInfo.countByServer[s.name] != null)
+                '${state.toolsInfo.countByServer[s.name]} 工具',
+            ],
+            subtitle: _serverSubtitle(s, state.toolsInfo),
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               TextButton(
                 onPressed: state.loading
@@ -586,14 +844,71 @@ class McpPanel extends ConsumerWidget {
 
 /// 添加流程的选择结果。
 class _AddChoice {
-  const _AddChoice._(this.isManual, this.isPaste, this.isUrl);
+  const _AddChoice._(this.isManual, this.isPaste, this.isUrl, [this.preset]);
   factory _AddChoice.manual() => const _AddChoice._(true, false, false);
   factory _AddChoice.paste() => const _AddChoice._(false, true, false);
   factory _AddChoice.url() => const _AddChoice._(false, false, true);
+  factory _AddChoice.preset(_PresetServer p) =>
+      _AddChoice._(false, false, false, p);
   final bool isManual;
   final bool isPaste;
   final bool isUrl;
+  final _PresetServer? preset;
 }
+
+/// 预置常用 MCP 工具(无需 API key,npx 直装)。
+class _PresetServer {
+  const _PresetServer({
+    required this.name,
+    required this.label,
+    required this.icon,
+    required this.command,
+    required this.args,
+  });
+  final String name;
+  final String label;
+  final IconData icon;
+  final String command;
+  final List<String> args;
+}
+
+const _presetServers = <_PresetServer>[
+  _PresetServer(
+    name: 'filesystem',
+    label: '文件系统',
+    icon: Icons.folder_outlined,
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-filesystem', '.'],
+  ),
+  _PresetServer(
+    name: 'fetch',
+    label: '网页抓取',
+    icon: Icons.language,
+    command: 'uvx',
+    args: ['mcp-server-fetch'],
+  ),
+  _PresetServer(
+    name: 'memory',
+    label: '持久记忆',
+    icon: Icons.memory,
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-memory'],
+  ),
+  _PresetServer(
+    name: 'sequential-thinking',
+    label: '深度推理',
+    icon: Icons.psychology_outlined,
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-sequential-thinking'],
+  ),
+  _PresetServer(
+    name: 'time',
+    label: '时间日期',
+    icon: Icons.schedule,
+    command: 'uvx',
+    args: ['mcp-server-time'],
+  ),
+];
 
 /// 命令安全级别。
 enum _CmdSafety { normal, unknown, warning }
