@@ -267,14 +267,16 @@ jobs:
           cp config.example.toml "$bundle"/ 2>/dev/null || true
           7z a "$bundle.zip" "./$bundle/*"
 
-      - name: Build installer
-        shell: bash
+      - name: Install Inno Setup
+        shell: pwsh
         run: |
-          # Install Inno Setup silently
-          curl -fsSL -o is-setup.exe "https://jrsoftware.org/download.php/is.exe"
-          ./is-setup.exe //VERYSILENT //SUPPRESSMSGBOXES //DIR="./innosetup"
-          version="${GITHUB_REF_NAME#v}"
-          ./innosetup/ISCC.exe //DAppVersion="$version" installer/weft.iss
+          choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $version = "$env:GITHUB_REF_NAME".TrimStart('v')
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" installer/weft.iss
 
       - uses: actions/upload-artifact@v4
         with:
